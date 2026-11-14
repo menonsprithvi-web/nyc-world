@@ -76,6 +76,18 @@
             font: 600 13px system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
     #hint:empty { display: none; }
     #hint.bottom { top: auto; bottom: 24px; }
+
+    /* Pinned to the screen (moves with the camera) while pages are open */
+    .hud-pill { position: fixed; z-index: 3; display: flex; align-items: center; gap: 10px;
+                padding: 8px 14px 8px 10px; border-radius: 999px; color: #fff; font: 600 14px system-ui, sans-serif;
+                background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.45);
+                backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); }
+    .hud-pill[hidden] { display: none; }
+    #close-hud { top: 18px; right: 18px; cursor: pointer; }
+    #close-hud:hover { background: rgba(255,255,255,.3); }
+    #close-hud kbd, #follow-hud kbd { font: 700 12px system-ui; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.25); }
+    #close-hud .x { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.25); }
+    #follow-hud { top: 64px; right: 18px; padding: 6px 14px; font-weight: 500; }
   </style>
   <script type="importmap">
     {
@@ -91,7 +103,7 @@
   <div class="hud">
     <h1>Midtown NYC</h1>
     <p>Click to look around · Esc to release · WASD move · Q/E down/up · Shift faster</p>
-    <p>Aim the dot at a ◯ button and click to open its pages (only one set at a time) · chat box is under the words</p>
+    <p>Aim the dot at a ◯ button and click to open its pages · X close · F pages follow you · chat under the words answers questions</p>
     <p>On a page: wheel scrolls, click follows a link · T add label · U undo · P hide/show</p>
     <p id="quality"></p>
   </div>
@@ -99,6 +111,8 @@
   <div id="world-ui"></div>
   <div id="crosshair"></div>
   <div id="hint"></div>
+  <div id="close-hud" class="hud-pill" hidden><span class="x">✕</span><span class="label">Close</span><kbd>X</kbd></div>
+  <div id="follow-hud" class="hud-pill" hidden></div>
   <div id="status">Loading 3D world…</div>
 
   <script type="module">
@@ -338,9 +352,9 @@
       el.className = "menu";
       el.innerHTML = `
         <header><h2></h2><span class="x" data-action="close">✕</span></header>
-        <div class="sub">6 pages · ask for another topic below</div>
+        <div class="sub">Ask anything about the 6 pages · /pages &lt;topic&gt; to change them</div>
         <div class="log"></div>
-        <div class="input-row"><input data-action="chat" placeholder="Ask for a topic…" /><span class="send" data-action="send">Send</span></div>`;
+        <div class="input-row"><input data-action="chat" placeholder="Ask about these pages…" /><span class="send" data-action="send">Send</span></div>`;
       el.querySelector("h2").textContent = item.data.text;
       const input = el.querySelector("input");
       input.addEventListener("focus", () => { controls.fpsMovement.enable = false; });
@@ -371,21 +385,78 @@
       return urls;
     }
 
+    // Chat: questions go to Claude along with the text of all six pages.
+    // "/pages <topic>" swaps the six pages to a new topic instead.
     async function sendChat(item) {
-      const input = item.cluster.menu.input;
+      const cluster = item.cluster;
+      const input = cluster.menu.input;
       const text = input.value.trim();
-      if (!text) return;
+      if (!text || cluster.busy) return;
       input.value = "";
       const m = document.createElement("div");
       m.className = "msg me";
       m.textContent = text;
-      item.cluster.menu.log.append(m);
-      botSay(item, "Looking…");
-      const urls = await fillTiles(item, text);
-      item.cluster.menu.log.lastChild.remove();
-      botSay(item, urls.length
-        ? `Here are ${urls.length} pages about “${text}”: ${urls.map((u, i) => `${i + 1}. ${niceTitle(u)}`).join(" · ")}`
-        : `I couldn't find pages about “${text}”.`);
+      cluster.menu.log.append(m);
+
+      const topic = text.match(/^\/pages\s+(.+)/i)?.[1];
+      if (topic) {
+        botSay(item, "Looking…");
+        const urls = await fillTiles(item, topic);
+        cluster.menu.log.lastChild.remove();
+        botSay(item, urls.length
+          ? `Here are ${urls.length} pages about “${topic}”: ${urls.map((u, i) => `${i + 1}. ${niceTitle(u)}`).join(" · ")}`
+          : `I couldn't find pages about “${topic}”.`);
+        return;
+      }
+
+      // Send what's actually on each screen right now (including pages you've
+      // navigated to), in full.
+      const pages = cluster.tiles.map((t) => ({
+        title: t.titleEl.textContent,
+        url: t.current ?? t.url ?? "",
+        text: t.frame.contentDocument?.body?.innerText ?? "",
+      })).filter((p) => p.text.trim());
+      if (!pages.length) return botSay(item, "The pages are still loading — try again in a moment.");
+
+      cluster.busy = true;
+      botSay(item, "…");
+      const reply = cluster.menu.log.lastChild;
+      let answer = "";
+      try {
+        const res = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: text, pages, history: cluster.history }),
+        });
+        if (!res.ok || !res.body) throw new Error(res.status === 404 || res.status === 405
+          ? "the chat server isn't running (start it with npm start)" : `HTTP ${res.status}`);
+        // Read the server-sent events stream: "delta" text, then "done"/"error".
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf("\n\n")) >= 0) {
+            const chunk = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            const ev = chunk.match(/^event: (.+)$/m)?.[1];
+            const data = JSON.parse(chunk.match(/^data: (.+)$/m)?.[1] ?? "{}");
+            if (ev === "delta") {
+              answer += data.text;
+              reply.textContent = answer;
+              reply.scrollIntoView({ block: "end" });
+            } else if (ev === "error") throw new Error(data.message);
+          }
+        }
+        cluster.history.push({ role: "user", content: text }, { role: "assistant", content: answer });
+      } catch (err) {
+        reply.textContent = `Sorry — ${err.message}`;
+      } finally {
+        cluster.busy = false;
+      }
     }
 
     // The 6 pages sit on a sphere around a viewing spot in front of the label
@@ -414,17 +485,41 @@
           const dir = toLabel.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th))
             .multiplyScalar(Math.cos(ph)).addScaledVector(up, Math.sin(ph)).normalize();
           const tile = makeTile(item, tiles.length);
-          tile.obj.position.copy(C).addScaledVector(dir, SPHERE_R);
-          tile.obj.lookAt(C); // face inward; fixed — pages never move
-          tile.obj.updateMatrixWorld();
+          tile.dir = dir; // direction from the sphere centre (used by follow mode)
           tiles.push(tile);
         }
       }
-      item.cluster = { menu, tiles, firstFill: true, center: C };
-      item.orb.el.textContent = "×";
-      botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Walk up to a page to read it, or ask for another topic.`);
+      item.cluster = { menu, tiles, firstFill: true, center: C, history: [], busy: false };
+      placeTiles(item.cluster);
+      updateCloseHud();
+      botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Ask me anything about them.`);
       fillTiles(item, item.data.query ?? item.data.text);
     }
+
+    // Put every page on the sphere around cluster.center, facing inward.
+    function placeTiles(cluster) {
+      for (const tile of cluster.tiles) {
+        tile.obj.position.copy(cluster.center).addScaledVector(tile.dir, SPHERE_R);
+        tile.obj.lookAt(cluster.center);
+        tile.obj.updateMatrixWorld();
+      }
+    }
+
+    // Follow mode (F): the sphere of pages travels with you as you walk.
+    let followMode = false;
+
+    // Close button pinned to the screen while pages are open (and the X key).
+    const closeHud = document.getElementById("close-hud");
+    const openItem = () => items.find((it) => it.cluster);
+    function updateCloseHud() {
+      const it = openItem();
+      closeHud.hidden = !it;
+      if (it) closeHud.querySelector(".label").textContent = `Close “${it.data.text}”`;
+      followHud.textContent = `F · pages follow you: ${followMode ? "on" : "off"}`;
+      followHud.hidden = !it;
+    }
+    const followHud = document.getElementById("follow-hud");
+    closeHud.addEventListener("click", () => { const it = openItem(); if (it) closeCluster(it); });
 
     function closeCluster(item) {
       if (!item.cluster) return;
@@ -437,7 +532,7 @@
       }
       if (target && (target === menu || tiles.includes(target))) target = null;
       item.cluster = null;
-      item.orb.el.textContent = "+";
+      updateCloseHud();
     }
 
     function buildAll() {
@@ -500,14 +595,15 @@
         const centre = s.kind === "orb" ? tmp.clone() : tmp.clone().setY(tmp.y - (scale * pxH) / halfH / 2);
         // Sample the centre (and, for buttons, the edges) — hide if any is
         // behind a page.
-        const rx = s.kind === "orb" ? (scale * s.pxW) / innerWidth : 0;
-        const ry = s.kind === "orb" ? (scale * pxH) / innerHeight : 0;
+        const reach = s.kind === "orb" ? 1 : 0.9; // menus: sample just inside the edges
+        const rx = (reach * scale * s.pxW) / innerWidth, ry = (reach * scale * pxH) / innerHeight;
         const samples = [[0, 0], [rx, 0], [-rx, 0], [0, ry], [0, -ry]];
         const blocked = !off && samples.some(([dx, dy]) => {
           const b = raycastTiles(centre.x + dx, centre.y + dy);
           return b && b.depth < depth - 0.05;
         });
-        const hidden = off || blocked;
+        // A label's button is replaced by the on-screen close button while its pages are open.
+        const hidden = off || blocked || (s.kind === "orb" && !!s.owner.cluster);
         s.el.style.visibility = hidden ? "hidden" : "visible";
         s.onScreen = !hidden;
         s.depth = depth;
@@ -707,6 +803,11 @@
         labels = labels.slice(0, -1);
         saveLabels();
         buildAll();
+      } else if (key === "x" && openItem()) {
+        closeCluster(openItem());
+      } else if (key === "f") {
+        followMode = !followMode;
+        updateCloseHud();
       } else if (key === "p") {
         uiVisible = !uiVisible;
       }
@@ -719,6 +820,12 @@
       controls.update(camera);
       applyLook();
       camera.updateMatrixWorld();
+      // Follow mode: keep the sphere of pages centred on you as you walk.
+      const open = openItem();
+      if (followMode && open && !open.cluster.center.equals(camera.position)) {
+        open.cluster.center.copy(camera.position);
+        placeTiles(open.cluster);
+      }
       layout(time);
       aim();
       renderer.render(scene, camera);
