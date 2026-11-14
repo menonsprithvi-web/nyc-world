@@ -19,7 +19,17 @@ python3 -m http.server 8000
 Or enable **GitHub Pages** (Settings → Pages → Deploy from branch → `main` / root)
 and open the published URL.
 
-Controls: **WASD** move · **drag** look · **Q/E** down/up · **Shift** faster.
+Controls:
+
+- **Click** the scene to look around with the mouse (crosshair in the centre), **Esc** to release
+- **WASD** move · **Q/E** down/up · **Shift** faster
+- **Aim the crosshair at a floating web page** — it glows blue — and **click** to use it in place
+  (scroll, click links, type). It glows green while you're using it. **Click the scene** or press
+  **Esc** to go back to looking around.
+- **T** add floating text (optionally with a web page under it) · **U** undo · **C** copy labels ·
+  **P** show/hide pages
+
+Only sites that allow embedding can be shown as pages (Wikipedia does; many sites don't).
 
 Add `?quality=full` to the URL to stream the full-resolution splat (~69 MB) from the
 World Labs CDN instead of the bundled 500k version (~8 MB).

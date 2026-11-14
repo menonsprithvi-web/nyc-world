@@ -7,30 +7,42 @@
   <style>
     html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
     canvas { display: block; touch-action: none; }
-    .hud { position: fixed; left: 16px; top: 16px; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+    .hud { position: fixed; left: 16px; top: 16px; z-index: 3; padding: 8px 12px; border-radius: 8px;
+           background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
     .hud h1 { margin: 0 0 4px; font-size: 15px; }
     .hud p { margin: 2px 0; color: rgba(255,255,255,.7); }
     .hud a { color: #9cf; }
-    #status { position: fixed; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.75); pointer-events: none; }
-    .hud { z-index: 2; }
-    /* Layer for 3D-positioned web pages. Clicks pass through to the 3D scene
-       except on the pages themselves. */
-    #pages { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
-    .page-panel { width: 800px; height: 560px; border-radius: 18px; overflow: hidden; background: #fff;
-                  box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 20px 60px rgba(0,0,0,.6); pointer-events: auto; }
-    .page-panel { display: flex; flex-direction: column; }
-    .page-panel iframe, .overlay iframe { flex: 1; width: 100%; border: 0; display: block; background: #fff; }
-    .bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px 0 16px; flex: none;
-           background: #14161f; color: #fff; font: 600 17px system-ui, sans-serif; }
-    .bar .title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: rgba(255,255,255,.85); }
-    .bar button { font: 600 15px system-ui, sans-serif; color: #fff; background: #2f6fed; border: 0;
-                  border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-    .bar button:hover { background: #4a82f0; }
-    .bar button.secondary { background: rgba(255,255,255,.12); }
-    /* Expanded (full-screen) page */
-    .overlay { position: fixed; inset: 4vh 4vw; z-index: 5; display: flex; flex-direction: column;
-               border-radius: 14px; overflow: hidden; box-shadow: 0 30px 120px rgba(0,0,0,.8); }
-    .overlay-backdrop { position: fixed; inset: 0; z-index: 4; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
+    #status { position: fixed; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.75); pointer-events: none; z-index: 4; }
+
+    /* Web pages floating in the world. They are positioned every frame with a
+       2D transform (projected from 3D), which keeps them hit-testable so they
+       can be used in place. Only the page you're using receives the mouse. */
+    #pages { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+    .page-panel { position: absolute; left: 0; top: 0; width: 800px; height: 600px; display: flex; flex-direction: column;
+                  border-radius: 18px; overflow: hidden; background: #fff; pointer-events: none;
+                  box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 20px 60px rgba(0,0,0,.6);
+                  transition: box-shadow .15s; will-change: transform; }
+    .page-panel.targeted { box-shadow: 0 0 0 8px #4da3ff, 0 0 60px rgba(77,163,255,.8); }
+    .page-panel.active { box-shadow: 0 0 0 8px #3ddc84, 0 0 60px rgba(61,220,132,.8); pointer-events: auto; }
+    .page-panel iframe { flex: 1; width: 100%; border: 0; display: block; background: #fff; }
+    .bar { display: flex; align-items: center; height: 44px; padding: 0 16px; flex: none;
+           background: #14161f; color: rgba(255,255,255,.85); font: 600 17px system-ui, sans-serif;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Crosshair + hints */
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+                 z-index: 3; pointer-events: none; }
+    #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff;
+                 box-shadow: 0 0 0 1px rgba(0,0,0,.6); border-radius: 1px; }
+    #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+    #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+    #crosshair.on-page::before, #crosshair.on-page::after { background: #4da3ff; }
+    #crosshair.hidden { display: none; }
+    #hint { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); z-index: 3;
+            padding: 5px 12px; border-radius: 999px; background: rgba(0,0,0,.65); color: #fff;
+            font: 600 13px system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
+    #hint:empty { display: none; }
+    #hint.bottom { top: auto; bottom: 24px; }
   </style>
   <script type="importmap">
     {
@@ -45,18 +57,19 @@
 <body>
   <div class="hud">
     <h1>Midtown NYC</h1>
-    <p>WASD move · drag look · Q/E down/up · Shift faster</p>
+    <p>Click to look around with the mouse · WASD move · Q/E down/up · Shift faster</p>
+    <p>Aim the crosshair at a page and click to use it · Esc / click the scene to go back</p>
     <p>T add floating text · U undo · C copy labels · P show/hide pages</p>
-    <p>Click a floating page to open it · ✕ or click outside to close</p>
     <p id="quality"></p>
   </div>
   <div id="pages"></div>
+  <div id="crosshair"></div>
+  <div id="hint"></div>
   <div id="status">Loading 3D world…</div>
 
   <script type="module">
     import * as THREE from "three";
     import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
-    import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 
     const world = await (await fetch("./world.json")).json();
     const full = new URLSearchParams(location.search).get("quality") === "full";
@@ -71,6 +84,7 @@
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
+    const canvas = renderer.domElement;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 1000);
@@ -86,54 +100,15 @@
       .then(() => status.remove())
       .catch((e) => { status.textContent = "Couldn't load the 3D world: " + e; });
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    // Spark handles WASD/QE movement; mouse-look is ours (pointer lock).
+    const controls = new SparkControls({ canvas });
     controls.fpsMovement.moveSpeed = 1.5;
-
-    // Web pages live in a separate CSS3D scene layered over the WebGL canvas.
-    const cssScene = new THREE.Scene();
-    const cssRenderer = new CSS3DRenderer({ element: document.getElementById("pages") });
-    cssRenderer.setSize(innerWidth, innerHeight);
-    // Clicking the 3D scene takes keyboard focus back from any page.
-    // The WebGL canvas receives all pointer events, so pages can't be clicked
-    // directly. Instead, a click (not a drag) on top of a page opens it
-    // full-screen, where it is fully interactive.
-    let downAt = null;
-    renderer.domElement.addEventListener("pointerdown", (e) => {
-      downAt = { x: e.clientX, y: e.clientY };
-    });
-    renderer.domElement.addEventListener("pointerup", (e) => {
-      if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
-      const hit = panelAt(e.clientX, e.clientY);
-      if (hit) expand(hit.userData.url, hit.userData.title);
-    });
-    renderer.domElement.addEventListener("pointermove", (e) => {
-      renderer.domElement.style.cursor = panelAt(e.clientX, e.clientY) ? "pointer" : "";
-    });
-
-    // Front-most visible page under the given screen point, if any.
-    function panelAt(x, y) {
-      let best = null;
-      let bestDist = Infinity;
-      for (const p of panels) {
-        if (!p.visible) continue;
-        const ndc = p.position.clone().project(camera);
-        if (ndc.z > 1 || ndc.z < -1) continue; // behind the camera
-        const r = p.element.getBoundingClientRect();
-        if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
-        const d = p.position.distanceTo(camera.position);
-        if (d < bestDist) {
-          best = p;
-          bestDist = d;
-        }
-      }
-      return best;
-    }
+    controls.pointerControls.enable = false;
 
     addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
-      cssRenderer.setSize(innerWidth, innerHeight);
     });
 
     // ---------- Floating text ----------
@@ -196,11 +171,13 @@
     const STORE = "nyc-world-labels-v2";
     let labels = JSON.parse(localStorage.getItem(STORE) ?? "null") ?? DEFAULT_LABELS;
     const sprites = [];
-    const panels = [];
+    const panels = []; // { el, pos: Vector3, baseY, phase, widthM, url, title }
     let pagesVisible = true;
+    const pagesLayer = document.getElementById("pages");
 
-    // A live web page as a 3D panel. The DOM element is 800×560 px; scaling
-    // it down turns pixels into metres.
+    // ---------- Web pages ----------
+    const PANEL_W = 800, PANEL_H = 600; // CSS px; scaled to `pageWidth` metres
+
     function makeFrame(url) {
       const iframe = document.createElement("iframe");
       // Wikipedia's mobile skin reads far better in a small panel.
@@ -215,69 +192,25 @@
       return iframe;
     }
 
-    function makeBar(title, buttons) {
-      const bar = document.createElement("div");
-      bar.className = "bar";
-      const t = document.createElement("span");
-      t.className = "title";
-      t.textContent = title;
-      bar.appendChild(t);
-      for (const [label, onClick, cls] of buttons) {
-        const b = document.createElement("button");
-        b.textContent = label;
-        if (cls) b.className = cls;
-        b.addEventListener("click", onClick);
-        bar.appendChild(b);
-      }
-      return bar;
-    }
-
-    // Open a page full-screen so it's comfortable to read and use.
-    let overlay = null;
-    function closeOverlay() {
-      overlay?.forEach((n) => n.remove());
-      overlay = null;
-    }
-    function expand(url, title) {
-      closeOverlay();
-      const backdrop = document.createElement("div");
-      backdrop.className = "overlay-backdrop";
-      backdrop.addEventListener("click", closeOverlay);
-      const box = document.createElement("div");
-      box.className = "overlay";
-      box.append(
-        makeBar(title, [
-          ["Open in new tab ↗", () => open(url, "_blank", "noopener"), "secondary"],
-          ["Close ✕", closeOverlay],
-        ]),
-        makeFrame(url),
-      );
-      document.body.append(backdrop, box);
-      overlay = [backdrop, box];
-    }
-
-    function makePanel(url, widthMetres, title) {
+    function makePanel(url, widthM, title) {
       const el = document.createElement("div");
       el.className = "page-panel";
-      el.append(makeBar(`${title} — click to open`, []), makeFrame(url));
-      const obj = new CSS3DObject(el);
-      obj.scale.setScalar(widthMetres / 800);
-      obj.userData.height = (560 * widthMetres) / 800;
-      obj.userData.url = url;
-      obj.userData.title = title;
-      return obj;
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.textContent = title;
+      el.append(bar, makeFrame(url));
+      pagesLayer.appendChild(el);
+      return { el, pos: new THREE.Vector3(), widthM, heightM: (PANEL_H * widthM) / PANEL_W, url, title };
     }
 
     function renderLabels() {
+      setActive(null);
       for (const s of sprites.splice(0)) {
         scene.remove(s);
         s.material.map.dispose();
         s.material.dispose();
       }
-      for (const p of panels.splice(0)) {
-        cssScene.remove(p);
-        p.element.remove();
-      }
+      for (const p of panels.splice(0)) p.el.remove();
       labels.forEach((l, i) => {
         const s = makeLabel(l);
         s.position.fromArray(l.position);
@@ -290,25 +223,157 @@
           const p = makePanel(l.url, l.pageWidth ?? 1.6, l.text);
           // Hang the page just below the label.
           const gap = 0.1;
-          const baseY = l.position[1] - s.scale.y / 2 - gap - p.userData.height / 2;
-          p.position.set(l.position[0], baseY, l.position[2]);
-          p.userData.baseY = baseY;
-          p.userData.phase = s.userData.phase;
-          p.visible = pagesVisible;
-          p.element.style.display = pagesVisible ? "" : "none";
-          cssScene.add(p);
+          p.baseY = l.position[1] - s.scale.y / 2 - gap - p.heightM / 2;
+          p.pos.set(l.position[0], p.baseY, l.position[2]);
+          p.phase = s.userData.phase;
           panels.push(p);
         }
       });
     }
-    const saveLabels = () => localStorage.setItem(STORE, JSON.stringify(labels));
-    renderLabels();
 
+    // Project each page from 3D to the screen and place it with a 2D transform.
+    const tmp = new THREE.Vector3();
+    function layoutPanels() {
+      const halfH = innerHeight / 2;
+      const focal = halfH / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      for (const p of panels) {
+        tmp.copy(p.pos).applyMatrix4(camera.matrixWorldInverse);
+        const depth = -tmp.z;
+        if (!pagesVisible || depth < 0.3) {
+          p.el.style.visibility = "hidden";
+          p.onScreen = false;
+          continue;
+        }
+        tmp.copy(p.pos).project(camera);
+        const sx = (tmp.x + 1) * innerWidth / 2;
+        const sy = (1 - tmp.y) * halfH;
+        const scale = (p.widthM * focal) / depth / PANEL_W;
+        const offScreen = Math.abs(tmp.x) > 2 || Math.abs(tmp.y) > 2;
+        p.el.style.visibility = offScreen ? "hidden" : "visible";
+        p.onScreen = !offScreen;
+        p.depth = depth;
+        p.el.style.transform =
+          `translate(${sx - PANEL_W / 2}px, ${sy - PANEL_H / 2}px) scale(${scale})`;
+        p.el.style.zIndex = String(Math.max(1, Math.round(100000 - depth * 100)));
+      }
+    }
+
+    // Front-most visible page under a screen point.
+    function panelAt(x, y) {
+      let best = null;
+      for (const p of panels) {
+        if (!p.onScreen) continue;
+        const r = p.el.getBoundingClientRect();
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+        if (!best || p.depth < best.depth) best = p;
+      }
+      return best;
+    }
+
+    // ---------- Look / aim / use ----------
+    // Modes:
+    //   "idle" — mouse free, nothing selected (click anywhere to look around)
+    //   "look" — pointer locked: mouse turns the view, crosshair aims
+    //   "page" — using a page in place: mouse free, only that page is live
+    let mode = "idle";
+    let target = null; // page under the crosshair while looking
+    let active = null; // page being used
+    let pendingActivate = null;
+    let yaw = 0, pitch = 0, lookDX = 0, lookDY = 0;
+    const crosshair = document.getElementById("crosshair");
+    const hint = document.getElementById("hint");
+
+    function setActive(p) {
+      active?.el.classList.remove("active");
+      active = p;
+      active?.el.classList.add("active");
+    }
+    function setTarget(p) {
+      if (p === target) return;
+      target?.el.classList.remove("targeted");
+      target = p;
+      target?.el.classList.add("targeted");
+    }
+
+    function updateUi() {
+      crosshair.classList.toggle("hidden", mode === "page");
+      crosshair.classList.toggle("on-page", mode === "look" && !!target);
+      hint.classList.toggle("bottom", mode !== "look");
+      hint.textContent =
+        mode === "look" ? (target ? `Click to use “${target.title}”` : "")
+        : mode === "page" ? `Using “${active.title}” · click the scene or press Esc to look around again`
+        : "Click to look around";
+    }
+
+    function startLook() {
+      setActive(null);
+      try {
+        const r = canvas.requestPointerLock();
+        r?.catch?.(() => {});
+      } catch {}
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (mode === "look") {
+        if (target) {
+          // Release the mouse right where the crosshair is, over the page.
+          pendingActivate = target;
+          document.exitPointerLock();
+        }
+      } else {
+        // Clicking the scene (anywhere but the active page) → look around.
+        document.activeElement?.blur();
+        setActive(null);
+        mode = "idle";
+        updateUi();
+        startLook();
+      }
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      if (document.pointerLockElement === canvas) {
+        mode = "look";
+        setActive(null);
+      } else if (pendingActivate) {
+        mode = "page";
+        setTarget(null);
+        setActive(pendingActivate);
+        pendingActivate = null;
+      } else {
+        mode = "idle";
+        setTarget(null);
+      }
+      updateUi();
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (mode !== "look") return;
+      lookDX += e.movementX;
+      lookDY += e.movementY;
+    });
+
+    function applyLook() {
+      // Pick up any rotation Spark applied (arrow keys), then add the mouse.
+      const eul = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+      yaw = eul.y - lookDX * 0.0022;
+      pitch = THREE.MathUtils.clamp(eul.x - lookDY * 0.0022, -1.45, 1.45);
+      lookDX = lookDY = 0;
+      camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, "YXZ"));
+    }
+
+    // ---------- Keys ----------
     addEventListener("keydown", async (e) => {
-      if (e.key === "Escape") return closeOverlay();
-      if (overlay || e.repeat || e.metaKey || e.ctrlKey) return;
+      if (e.key === "Escape" && mode === "page") {
+        setActive(null);
+        mode = "idle";
+        updateUi();
+        return;
+      }
+      if (e.repeat || e.metaKey || e.ctrlKey) return;
       const key = e.key.toLowerCase();
       if (key === "t") {
+        if (document.pointerLockElement) document.exitPointerLock();
         // Place text 3m in front of wherever you're looking.
         const text = prompt("Floating text:");
         if (!text?.trim()) return;
@@ -327,11 +392,9 @@
         renderLabels();
       } else if (key === "p") {
         pagesVisible = !pagesVisible;
-        for (const p of panels) {
-          p.visible = pagesVisible;
-          p.element.style.display = pagesVisible ? "" : "none";
-        }
+        if (!pagesVisible) { setTarget(null); setActive(null); if (mode === "page") mode = "idle"; updateUi(); }
       } else if (key === "c") {
+        if (document.pointerLockElement) document.exitPointerLock();
         // Paste the result into DEFAULT_LABELS to make your labels permanent.
         const json = JSON.stringify(labels, null, 2);
         console.log(json);
@@ -340,19 +403,51 @@
       }
     });
 
+    const saveLabels = () => localStorage.setItem(STORE, JSON.stringify(labels));
+    renderLabels();
+    updateUi();
+
+    // ---------- Frame loop ----------
     renderer.setAnimationLoop((time) => {
       controls.update(camera);
-      // Gentle floating bob
+      applyLook();
+      camera.updateMatrixWorld();
+
+      // Gentle floating bob (the page you're using holds still).
       const t = time / 1000;
       for (const s of sprites) s.position.y = s.userData.baseY + Math.sin(t * 1.2 + s.userData.phase) * 0.08;
       for (const p of panels) {
-        p.position.y = p.userData.baseY + Math.sin(t * 1.2 + p.userData.phase) * 0.08;
-        // Turn to face the viewer, staying upright.
-        p.lookAt(camera.position.x, p.position.y, camera.position.z);
+        if (p !== active) p.pos.y = p.baseY + Math.sin(t * 1.2 + p.phase) * 0.08;
+      }
+      layoutPanels();
+
+      if (mode === "look") {
+        const before = target;
+        setTarget(panelAt(innerWidth / 2, innerHeight / 2));
+        if (before !== target) updateUi();
       }
       renderer.render(scene, camera);
-      cssRenderer.render(cssScene, camera);
     });
+
+    // Small hook for automated tests: aim the camera at page i.
+    window.__world = {
+      get mode() { return mode; },
+      aimAt(i) {
+        const d = panels[i].pos.clone().sub(camera.position);
+        const y = Math.atan2(-d.x, -d.z);
+        const x = Math.atan2(d.y, Math.hypot(d.x, d.z));
+        camera.quaternion.setFromEuler(new THREE.Euler(x, y, 0, "YXZ"));
+      },
+      targetTitle: () => target?.title ?? null,
+      // Simulates "click while aiming" without pointer lock (headless can't lock).
+      useTarget() {
+        const p = panelAt(innerWidth / 2, innerHeight / 2);
+        if (!p) return false;
+        mode = "page"; setTarget(null); setActive(p); updateUi();
+        return true;
+      },
+      lookMode() { mode = "look"; setActive(null); updateUi(); },
+    };
   </script>
 </body>
 </html>
