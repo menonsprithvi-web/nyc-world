@@ -24,25 +24,28 @@ Controls:
 - **Click** the scene to look around with the mouse (a small dot marks the centre), **Esc** to release
 - **WASD** move · **Q/E** down/up · **Shift** faster
 - Each floating label has a round **＋ button** beside it. Aim the dot at it and **click** to open
-  (only one label's pages are open at a time):
-  - a frosted-glass **chatbox** just below the words — aim at the box, click, type a question and
-    press **Enter**; Claude answers using the text of all six pages and cites them like [3].
-    The chat can also **change the screens** (each has a number badge 1-6): ask it to
-    *"put the Empire State Building on screen 3"*, *"highlight where screen 5 talks about Korea Way"*
-    or *"show me pages about Central Park instead"*. You can also type `/pages <topic>` directly.
-    Click the scene to look around again.
-  - **6 web pages** in a 2 × 3 group in front of the label, to the right of the words and chatbox.
-    They **stay in place** but always **turn to face you** as you move, and are sized so all six fit
-    in view from the spot in front of the label.
-- **Aim the dot** at a page: the **mouse wheel** scrolls it, **click** follows the link under the dot,
-  **◀ Back** goes back.
-- To close: click the **×** button beside the label, press **X**, or use the **Close** button pinned
-  to the top-right of the screen. **F** makes the pages **follow you** as you walk (press again to
-  leave them in place).
+  (only one label's set is open at a time):
+  - **6 scholarly papers** from [OpenAlex](https://openalex.org) (an open index of ~250M works
+    built from Crossref, PubMed, arXiv and more) — each screen shows the title, authors, venue,
+    year, a **Cited by N** badge, DOI and free-full-text links, the abstract, its most-cited
+    references and related papers. Click a reference or related paper to follow the citation trail
+    inside the screen; DOI / full-text links open the publisher in a new tab.
+  - a **chat panel** — aim at the text field, click, type and press **Enter**. Claude answers from
+    the six screens, citing them like [3], and can **change the screens** (each has a number):
+    *"open a paper about congestion pricing on screen 2"*, *"highlight where screen 5 mentions
+    zoning"*, *"show me papers about urban heat islands instead"*, or type `/pages <topic>`.
+  - The screens and chat panel form one group that **moves with you** as you walk, without
+    turning, so the arrangement never changes from where you stand. **F** leaves them in place
+    (they then turn to face you).
+- **Aim the dot** at a screen: the **mouse wheel** scrolls it, **click** follows the link under the
+  dot, **Back** in the screen's toolbar goes back.
+- To close: the **✕** at the top-right of any screen, the **×** button beside the label, the pinned
+  **Close** button at the top-right of your view, or press **X**.
 - **T** add a label (with an optional topic) · **U** undo · **P** hide/show everything
 
-Pages are clean, script-free reading views fetched from Wikipedia (or any site that allows
-cross-origin fetching), so the crosshair can drive them.
+The interface follows the public Material Design 3 / spatial-panel style (dark rounded panels,
+floating "orbiter" toolbars, pill text fields); it is original styling, not copied assets. Screens are
+script-free reading views rendered on this page, so the crosshair can drive them.
 
 Add `?quality=full` to the URL to stream the full-resolution splat (~69 MB) from the
 World Labs CDN instead of the bundled 500k version (~8 MB).

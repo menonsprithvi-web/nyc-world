@@ -20,81 +20,128 @@
     /* Web pages are real 3D (CSS3D) so they can sit on a sphere facing inward;
        the crosshair hit-tests them with a raycast, not the DOM. */
     #pages3d { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+    /* CSS3DRenderer sets pointer-events:auto on each object; all interaction is
+       via the crosshair, so the real mouse must always reach the 3D scene. */
+    #pages3d * { pointer-events: none !important; }
     .surface { position: absolute; left: 0; top: 0; transform-origin: 50% 0; will-change: transform; }
 
-    /* Circular button next to each label */
-    .orb { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
-           background: rgba(255,255,255,.18); border: 3px solid rgba(255,255,255,.85); color: #fff;
-           font: 600 40px/1 system-ui, sans-serif; backdrop-filter: blur(4px);
+    /* ===== Spatial UI — Material 3 dark, Android-XR-style panels & orbiters =====
+       Original styling following the public Material Design 3 guidance; no
+       Google assets are used. Tokens below are the only colours in the UI. */
+    :root {
+      --surface: rgba(30, 31, 36, 0.92);          /* panel surface */
+      --surface-high: rgba(51, 53, 60, 0.96);     /* raised controls */
+      --surface-highest: #3c3e45;
+      --on-surface: #e3e2e6;
+      --on-surface-var: #c4c6d0;
+      --outline: rgba(196, 198, 208, 0.28);
+      --primary: #a8c7fa;
+      --on-primary: #062e6f;
+      --primary-container: #0842a0;
+      --on-primary-container: #d3e3fd;
+      --inverse-surface: #e3e2e6;
+      --inverse-on-surface: #2f3036;
+      --focus: #a8c7fa;
+      --radius-panel: 32px;
+      --font: "Roboto", system-ui, -apple-system, sans-serif;
+    }
+    .icon { width: 1em; height: 1em; display: block; fill: none; stroke: currentColor;
+            stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Round action button next to each label (FAB style) */
+    .orb { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center;
+           background: var(--primary-container); color: var(--on-primary-container); font-size: 30px;
+           box-shadow: 0 6px 18px rgba(0,0,0,.45);
            /* Never transition `transform`: it is rewritten every frame to place the
               button, and animating it makes the button trail behind (dodge the dot). */
-           transition: background .12s, color .12s, box-shadow .12s; }
-    .orb.hover { background: #fff; color: #111; box-shadow: 0 0 0 6px rgba(255,255,255,.45), 0 0 24px rgba(255,255,255,.8); }
+           transition: background .12s, color .12s, box-shadow .12s, border-radius .12s; }
+    .orb.open { background: var(--surface-high); color: var(--on-surface); border-radius: 50%; }
+    .orb.hover { background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 4px rgba(168,199,250,.35), 0 8px 24px rgba(0,0,0,.5); }
 
-    /* Menu with chat — glassmorphism */
-    .menu { width: 480px; height: 480px; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
-            background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
-            backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
-            border: 1.5px solid rgba(255,255,255,.45);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 20px 50px rgba(0,0,0,.35);
-            font: 18px/1.4 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
-    .menu header { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px 18px; }
-    .menu header h2 { flex: 1; margin: 0; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .menu .x { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); font-size: 20px; }
-    .menu .sub { padding: 0 18px 8px; color: rgba(255,255,255,.55); font-size: 15px; }
-    .menu .log { flex: 1; overflow-y: auto; padding: 8px 14px; display: flex; flex-direction: column; gap: 8px; }
-    .msg { max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 16px; }
-    .msg.bot { align-self: flex-start; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.25); }
-    .msg.me { align-self: flex-end; background: rgba(77,163,255,.45); border: 1px solid rgba(255,255,255,.35); }
-    .menu .input-row { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid rgba(255,255,255,.25); }
-    .menu input { flex: 1; min-width: 0; font: 17px system-ui, sans-serif; color: #fff; background: rgba(255,255,255,.14);
-                  border: 1.5px solid rgba(255,255,255,.4); border-radius: 14px; padding: 8px 12px; outline: none; }
-    .menu input::placeholder { color: rgba(255,255,255,.7); }
-    .menu input:focus { border-color: #fff; background: rgba(255,255,255,.22); }
-    .menu .send { padding: 0 14px; border-radius: 14px; display: grid; place-items: center; font-weight: 600;
-                  background: rgba(255,255,255,.25); border: 1.5px solid rgba(255,255,255,.5); }
-    .menu { position: relative; }
-    .menu .hover { outline: 3px solid #f5b400; outline-offset: 2px; }
+    /* Chat panel */
+    .menu { position: relative; width: 480px; height: 500px; display: flex; flex-direction: column;
+            border-radius: var(--radius-panel); overflow: hidden; background: var(--surface);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 0 0 1px var(--outline), 0 24px 60px rgba(0,0,0,.5);
+            font: 400 17px/1.45 var(--font); color: var(--on-surface); }
+    .menu header { display: flex; align-items: center; gap: 12px; padding: 18px 14px 6px 24px; }
+    .menu header h2 { flex: 1; margin: 0; font: 500 22px/1.3 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .menu .x { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 20px;
+               background: var(--surface-high); color: var(--on-surface); transition: background .12s; }
+    .menu .sub { padding: 0 24px 10px; color: var(--on-surface-var); font: 400 14px/1.4 var(--font); }
+    .menu .log { flex: 1; overflow-y: auto; padding: 6px 16px 10px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 86%; padding: 10px 16px; border-radius: 20px; font: 400 16px/1.45 var(--font); }
+    .msg.bot { align-self: flex-start; background: var(--surface-high); color: var(--on-surface); border-bottom-left-radius: 6px; }
+    .msg.me { align-self: flex-end; background: var(--primary-container); color: var(--on-primary-container); border-bottom-right-radius: 6px; }
+    .msg.note { align-self: flex-start; background: none; color: var(--on-surface-var); font-size: 14px; padding: 2px 6px; }
+    .menu .input-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px 16px; }
+    .menu input { flex: 1; min-width: 0; height: 52px; box-sizing: border-box; padding: 0 22px; border-radius: 26px;
+                  font: 400 17px var(--font); color: var(--on-surface); background: var(--surface-highest);
+                  border: 2px solid transparent; outline: none; transition: border-color .12s; }
+    .menu input::placeholder { color: var(--on-surface-var); }
+    .menu input:focus { border-color: var(--focus); }
+    .menu .send { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+                  font-size: 22px; background: var(--primary); color: var(--on-primary); transition: filter .12s; }
+    /* Crosshair focus on a control: Material-style focus ring */
+    .menu .hover { box-shadow: 0 0 0 3px var(--focus); }
+    .menu .x.hover { background: var(--surface-highest); }
+    .menu .send.hover { filter: brightness(1.12); }
 
-    /* Web page tiles */
-    .tile { width: 800px; height: 600px; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: #fff;
-            box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 20px 60px rgba(0,0,0,.6); transition: height .25s ease, box-shadow .15s; }
-    .tile.live { box-shadow: 0 0 0 6px #4da3ff, 0 0 50px rgba(77,163,255,.7); }
-    .tile iframe { flex: 1; width: 100%; border: 0; display: block; background: #fff; }
-    .bar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px 0 18px; flex: none;
-           background: #14161f; color: rgba(255,255,255,.9); font: 600 20px system-ui, sans-serif; }
-    .bar .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .bar .num { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
-                background: #fff; color: #14161f; font: 800 18px system-ui, sans-serif; }
-    .msg.note { font-size: 14px; opacity: .85; font-style: italic; }
-    .bar .back { padding: 6px 14px; border-radius: 8px; background: rgba(255,255,255,.14); font-size: 18px; }
-    .bar .back.hover { background: #f5b400; color: #111; }
-    .bar .back[hidden] { display: none; }
+    /* Web page "screens": a floating orbiter bar above a rounded panel */
+    .tile { width: 800px; height: 672px; position: relative; background: none; }
+    .tile .orbiter { position: absolute; left: 50%; top: 0; transform: translateX(-50%); max-width: 660px;
+                     height: 56px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 22px 0 8px;
+                     border-radius: 28px; background: var(--surface); color: var(--on-surface);
+                     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+                     box-shadow: 0 0 0 1px var(--outline), 0 10px 28px rgba(0,0,0,.45); font: 500 19px var(--font); }
+    .tile .orbiter .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile .num { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+                 background: var(--primary-container); color: var(--on-primary-container); font: 500 18px var(--font); }
+    .tile .back { flex: none; height: 40px; padding: 0 16px 0 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px;
+                  background: var(--surface-high); color: var(--on-surface); font: 500 16px var(--font); transition: background .12s; }
+    .tile .back .icon { font-size: 20px; }
+    .tile .back.hover { background: var(--primary); color: var(--on-primary); }
+    .tile .back[hidden] { display: none; }
+    .tile .panel { position: absolute; left: 0; right: 0; top: 72px; bottom: 0; border-radius: var(--radius-panel);
+                   overflow: hidden; background: #fff;
+                   box-shadow: 0 0 0 1px var(--outline), 0 24px 60px rgba(0,0,0,.5); transition: box-shadow .15s; }
+    .tile .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+    .tile .tclose { position: absolute; right: 4px; top: 4px; width: 48px; height: 48px; border-radius: 50%;
+                    display: grid; place-items: center; font-size: 22px; background: var(--surface); color: var(--on-surface);
+                    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+                    box-shadow: 0 0 0 1px var(--outline), 0 8px 20px rgba(0,0,0,.45); transition: background .12s, color .12s; }
+    .tile .tclose.hover { background: var(--primary); color: var(--on-primary); }
+    .tile.live .panel { box-shadow: 0 0 0 4px var(--focus), 0 24px 60px rgba(0,0,0,.5); }
+    .tile.live .orbiter { box-shadow: 0 0 0 2px var(--focus), 0 10px 28px rgba(0,0,0,.45); }
 
-    /* Crosshair dot + hint */
+    /* Crosshair dot + hint (Material plain tooltip / snackbar) */
     #crosshair { position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; z-index: 3;
                  border-radius: 50%; background: #fff; pointer-events: none; transition: transform .1s; }
     #crosshair.on-link { transform: scale(1.6); }
     #crosshair.hidden { display: none; }
-    #hint { position: fixed; left: 50%; top: calc(50% + 20px); transform: translateX(-50%); z-index: 3;
-            max-width: 60vw; overflow: hidden; text-overflow: ellipsis;
-            padding: 5px 12px; border-radius: 999px; background: rgba(0,0,0,.65); color: #fff;
-            font: 600 13px system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
+    #hint { position: fixed; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); z-index: 3;
+            max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
+            padding: 8px 16px; border-radius: 8px; background: var(--inverse-surface); color: var(--inverse-on-surface);
+            font: 500 14px/1.3 var(--font); box-shadow: 0 4px 12px rgba(0,0,0,.35); }
     #hint:empty { display: none; }
-    #hint.bottom { top: auto; bottom: 24px; }
+    #hint.bottom { top: auto; bottom: 28px; }
 
-    /* Pinned to the screen (moves with the camera) while pages are open */
+    /* Screen-pinned orbiter toolbar while pages are open (moves with the camera) */
     .hud-pill { position: fixed; z-index: 3; display: flex; align-items: center; gap: 10px;
-                padding: 8px 14px 8px 10px; border-radius: 999px; color: #fff; font: 600 14px system-ui, sans-serif;
-                background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.45);
-                backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); }
+                height: 48px; box-sizing: border-box; padding: 0 16px 0 6px; border-radius: 24px;
+                background: var(--surface); color: var(--on-surface); font: 500 15px var(--font);
+                backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+                box-shadow: 0 0 0 1px var(--outline), 0 8px 24px rgba(0,0,0,.45); }
     .hud-pill[hidden] { display: none; }
-    #close-hud { top: 18px; right: 18px; cursor: pointer; }
-    #close-hud:hover { background: rgba(255,255,255,.3); }
-    #close-hud kbd, #follow-hud kbd { font: 700 12px system-ui; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.25); }
-    #close-hud .x { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.25); }
-    #follow-hud { top: 64px; right: 18px; padding: 6px 14px; font-weight: 500; }
+    #close-hud { top: 18px; right: 18px; cursor: pointer; transition: background .12s; }
+    #close-hud:hover { background: var(--surface-high); }
+    #close-hud .x { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px;
+                    background: var(--surface-highest); }
+    .hud-pill kbd { font: 500 12px var(--font); padding: 3px 8px; border-radius: 8px; background: var(--surface-highest); color: var(--on-surface-var); }
+    #follow-hud { top: 74px; right: 18px; padding: 0 16px; height: 40px; font-weight: 400; color: var(--on-surface-var); }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" />
   <script type="importmap">
     {
       "imports": {
@@ -117,7 +164,7 @@
   <div id="world-ui"></div>
   <div id="crosshair"></div>
   <div id="hint"></div>
-  <div id="close-hud" class="hud-pill" hidden><span class="x">✕</span><span class="label">Close</span><kbd>X</kbd></div>
+  <div id="close-hud" class="hud-pill" hidden><span class="x"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="label">Close</span><kbd>X</kbd></div>
   <div id="follow-hud" class="hud-pill" hidden></div>
   <div id="status">Loading 3D world…</div>
 
@@ -206,25 +253,25 @@
 
     // Labels. Positions are [x, y, z] relative to the starting viewpoint:
     // -z is straight ahead, +x is right, +y is up. `query` picks the 6 pages
-    // (Wikipedia search); `url` (optional) is pinned as the first page.
+    // (scholarly search on OpenAlex); `url` (optional) is pinned as page 1.
     const WIKI = "https://en.wikipedia.org/wiki/";
     const DEFAULT_LABELS = [
       { text: "Midtown Manhattan", position: [0, 3.2, -9], size: 2, color: "#ffffff",
-        query: "Midtown Manhattan", url: WIKI + "Midtown_Manhattan" },
+        query: "Midtown Manhattan urban development" },
       // Cars, estimated from where they sit in the panorama
       // (left yellow cab, center yellow cab, white sedan on the right).
       { text: "car", position: [-5.5, 0.15, -7.1], size: 1.3, color: "#ffd84a",
-        query: "New York City taxi", url: WIKI + "Taxicabs_of_New_York_City" },
+        query: "New York City taxi" },
       { text: "car", position: [2.2, 0.15, -8.7], size: 1.3, color: "#ffd84a",
-        query: "yellow cab New York", url: WIKI + "Taxicabs_of_New_York_City" },
+        query: "taxi ride-hailing competition New York" },
       { text: "car", position: [7.4, 0.15, -3.1], size: 1.3, color: "#ffffff",
-        query: "automobile", url: WIKI + "Car" },
+        query: "automobile dependence cities" },
       { text: "🌭 Street vendors", position: [-5, 1.8, 4], size: 1, color: "#ff8a8a",
-        query: "New York City street food", url: WIKI + "Hot_dog_cart" },
+        query: "street food vendors New York City" },
       { text: "✨ Generated with World Labs Marble", position: [3.5, 0.2, -4], size: 0.7, color: "#9fd4ff",
-        query: "Gaussian splatting", url: "https://sparkjs.dev/" },
+        query: "3D Gaussian splatting" },
     ];
-    const STORE = "nyc-world-labels-v3";
+    const STORE = "nyc-world-labels-v4";
     let labels = JSON.parse(localStorage.getItem(STORE) ?? "null") ?? DEFAULT_LABELS;
     const saveLabels = () => localStorage.setItem(STORE, JSON.stringify(labels));
 
@@ -234,11 +281,11 @@
     const surfaces = []; // everything projected: { el, pos, widthM, pxW, kind, owner, ... }
 
     // ---------- Page loading (same-origin reading views) ----------
-    const TILE_W = 800, TILE_H = 600;
+    const TILE_W = 800, TILE_H = 672; // 72px orbiter row + 600px page panel
 
     const READER_CSS = `
       html { scroll-behavior: auto; }
-      body { margin: 0; padding: 22px 30px 60px; font: 28px/1.5 Georgia, "Times New Roman", serif; color: #202122; background: #fff; }
+      body { margin: 0; padding: 22px 30px 60px; font: 30px/1.5 Georgia, "Times New Roman", serif; color: #202122; background: #fff; }
       h1, h2, h3 { font-family: system-ui, sans-serif; line-height: 1.25; }
       img { max-width: 100%; height: auto; }
       table { max-width: 100%; }
@@ -249,7 +296,23 @@
       a.xhair-hover { background: #ffe98a; outline: 3px solid #f5b400; border-radius: 3px; color: #111; }
       mark.xhl { background: #7cf0a8; color: #111; padding: 2px 3px; border-radius: 4px; box-shadow: 0 0 0 3px #2fbf71; }
       .source { margin-top: 40px; font: 16px system-ui, sans-serif; color: #72777d; }
+      .paper h1 { font: 500 38px/1.25 Roboto, system-ui, sans-serif; margin: 6px 0 12px; }
+      .paper h2 { font: 500 24px/1.3 Roboto, system-ui, sans-serif; margin: 34px 0 10px; color: #1f1f1f; }
+      .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 14px; font: 500 18px Roboto, system-ui, sans-serif; }
+      .chip { padding: 6px 14px; border-radius: 10px; background: #e8eef9; color: #0b3d91; }
+      .chip.cited { background: #0842a0; color: #fff; }
+      .chip.oa { background: #e3f4e8; color: #0b6b2f; }
+      .authors { font: 400 21px/1.45 Roboto, system-ui, sans-serif; color: #444; margin-bottom: 16px; }
+      .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 8px; }
+      .btns a { display: inline-block; padding: 10px 20px; border-radius: 22px; font: 500 19px Roboto, system-ui, sans-serif;
+                background: #0842a0; color: #fff; }
+      .btns a.alt { background: #e8eef9; color: #0b3d91; }
+      .abstract { font-size: 28px; line-height: 1.55; }
+      ol.works { padding-left: 34px; font: 400 21px/1.4 Roboto, system-ui, sans-serif; }
+      ol.works li { margin: 0 0 12px; }
+      ol.works .n { color: #666; font-size: 18px; }
     `;
+    const esc = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
     const wikiTitle = (u) => {
       const m = u.match(/^https:\/\/en\.wikipedia\.org\/wiki\/([^?#]+)/);
@@ -263,7 +326,76 @@
       return (data.query?.search ?? []).map((r) => WIKI + encodeURIComponent(r.title.replace(/ /g, "_")));
     }
 
+    // OpenAlex: an open index of scholarly works (papers, citations, venues).
+    // Works are addressed by their canonical URL, https://openalex.org/W….
+    const oaId = (u) => u?.match(/^https:\/\/openalex\.org\/(W\d+)$/)?.[1] ?? null;
+    const titleCache = new Map(); // work URL → title, for screen titles before load
+
+    async function searchScholar(query, limit = 6) {
+      const api = "https://api.openalex.org/works?search=" + encodeURIComponent(query) +
+        `&filter=has_abstract:true&per-page=${limit}&select=id,display_name`;
+      const data = await (await fetch(api)).json();
+      return (data.results ?? []).map((w) => { titleCache.set(w.id, w.display_name); return w.id; });
+    }
+
+    async function workList(ids) {
+      if (!ids.length) return [];
+      const api = "https://api.openalex.org/works?filter=openalex_id:" + ids.map((u) => u.split("/").pop()).join("|") +
+        `&per-page=${ids.length}&select=id,display_name,publication_year,cited_by_count`;
+      const data = await (await fetch(api)).json();
+      return (data.results ?? []).sort((a, b) => b.cited_by_count - a.cited_by_count);
+    }
+
+    // OpenAlex stores abstracts as {word: [positions]}; rebuild the text.
+    function abstractText(inv) {
+      if (!inv) return "";
+      const words = [];
+      for (const [w, pos] of Object.entries(inv)) for (const p of pos) words[p] = w;
+      return words.filter(Boolean).join(" ");
+    }
+
+    async function paperHtml(id) {
+      const w = await (await fetch("https://api.openalex.org/works/" + id)).json();
+      if (w.error) throw new Error(w.error);
+      const [refs, related] = await Promise.all([
+        workList((w.referenced_works ?? []).slice(0, 12)),
+        workList((w.related_works ?? []).slice(0, 8)),
+      ]);
+      const venue = w.primary_location?.source?.display_name;
+      const authors = (w.authorships ?? []).map((a) => a.author?.display_name).filter(Boolean);
+      const pdf = w.open_access?.oa_url;
+      const list = (ws) => ws.length
+        ? `<ol class="works">${ws.map((r) => `<li><a href="${esc(r.id)}">${esc(r.display_name)}</a> <span class="n">(${r.publication_year ?? "n.d."} · cited by ${r.cited_by_count.toLocaleString()})</span></li>`).join("")}</ol>`
+        : "<p>None listed.</p>";
+      titleCache.set(w.id, w.display_name);
+      return {
+        title: w.display_name,
+        html: `<!doctype html><html><head><meta charset="utf-8"><base href="https://openalex.org/"><style>${READER_CSS}</style></head>
+          <body class="paper">
+            <div class="chips">
+              <span class="chip cited">Cited by ${(w.cited_by_count ?? 0).toLocaleString()}</span>
+              ${w.publication_year ? `<span class="chip">${w.publication_year}</span>` : ""}
+              ${w.type ? `<span class="chip">${esc(w.type)}</span>` : ""}
+              ${w.open_access?.is_oa ? `<span class="chip oa">Open access</span>` : ""}
+            </div>
+            <h1>${esc(w.display_name)}</h1>
+            <div class="authors">${esc(authors.slice(0, 8).join(", "))}${authors.length > 8 ? ` + ${authors.length - 8} more` : ""}${venue ? ` — <i>${esc(venue)}</i>` : ""}</div>
+            <div class="btns">
+              ${w.doi ? `<a href="${esc(w.doi)}">DOI ↗</a>` : ""}
+              ${pdf ? `<a class="alt" href="${esc(pdf)}">Free full text ↗</a>` : ""}
+            </div>
+            <h2>Abstract</h2>
+            <p class="abstract">${esc(abstractText(w.abstract_inverted_index)) || "No abstract available."}</p>
+            <h2>Most-cited references</h2>${list(refs)}
+            <h2>Related papers</h2>${list(related)}
+            <p class="source">Scholarly metadata from OpenAlex (openalex.org, CC0). Abstracts belong to their publishers.</p>
+          </body></html>`,
+      };
+    }
+
     async function fetchPageHtml(pageUrl) {
+      const work = oaId(pageUrl);
+      if (work) return paperHtml(work);
       const title = wikiTitle(pageUrl);
       if (title) {
         const api = "https://en.wikipedia.org/w/api.php?action=parse&format=json&formatversion=2&origin=*" +
@@ -290,7 +422,7 @@
       return { title: doc.title || pageUrl, html: "<!doctype html>" + doc.documentElement.outerHTML };
     }
 
-    const niceTitle = (u) => decodeURIComponent((wikiTitle(u) ?? u).replace(/_/g, " "));
+    const niceTitle = (u) => titleCache.get(u) ?? (oaId(u) ? "Paper" : decodeURIComponent((wikiTitle(u) ?? u).replace(/_/g, " ")));
 
     async function loadPage(t, pageUrl, { push = true } = {}) {
       if (push && t.current) t.history.push(t.current);
@@ -368,12 +500,14 @@
       for (const a of actions) {
         const screen = Number(a?.screen);
         const t = tiles[screen - 1];
-        if (a?.type === "open" && t && typeof a.page === "string") {
-          const pageUrl = WIKI + encodeURIComponent(a.page.trim().replace(/ /g, "_"));
+        if (a?.type === "open" && t && typeof (a.query ?? a.page) === "string") {
+          const q = (a.query ?? a.page).trim();
+          const pageUrl = (await searchScholar(q, 1).catch(() => []))[0];
+          if (!pageUrl) { notes.push(`↳ couldn't find a paper for “${q}”`); continue; }
           const loaded = waitForLoad(t);
           await loadPage(t, pageUrl);
           await loaded;
-          notes.push(`↳ opened “${a.page}” on screen ${screen}`);
+          notes.push(`↳ opened “${niceTitle(pageUrl)}” on screen ${screen}`);
         } else if (a?.type === "find" && t && typeof a.text === "string") {
           const found = highlightText(t, a.text);
           notes.push(found
@@ -407,17 +541,24 @@
       return s;
     }
 
-    const TILE_WM = 1.6; // tile width in metres
-    const BAR_H = 52;    // tile title bar height, px
+    const TILE_WM = 1.5; // tile width in metres
+    const ORBIT_H = 72;  // height of the orbiter row above each page panel, px
+    // Simple line icons (drawn here, stroked with currentColor).
+    const ICON = {
+      close: '<svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+      plus: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+      back: '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
+      send: '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
+    };
 
     function makeTile(item, index) {
       const el = document.createElement("div");
       el.className = "tile";
       const bar = document.createElement("div");
-      bar.className = "bar";
+      bar.className = "orbiter";
       const backBtn = document.createElement("span");
       backBtn.className = "back";
-      backBtn.textContent = "◀ Back";
+      backBtn.innerHTML = `${ICON.back}<span>Back</span>`;
       backBtn.hidden = true;
       const titleEl = document.createElement("span");
       titleEl.className = "title";
@@ -429,21 +570,27 @@
       const frame = document.createElement("iframe");
       // Same-origin (srcdoc) but no scripts: we can drive it, it can't run code.
       frame.setAttribute("sandbox", "allow-same-origin");
-      el.append(bar, frame);
+      const panel = document.createElement("div");
+      panel.className = "panel";
+      panel.append(frame);
+      const closeBtn = document.createElement("span");
+      closeBtn.className = "tclose";
+      closeBtn.innerHTML = ICON.close;
+      el.append(bar, panel, closeBtn);
       const obj = new CSS3DObject(el);
       obj.scale.setScalar(TILE_WM / TILE_W); // CSS px → metres
       cssScene.add(obj);
-      return { kind: "tile", el, obj, owner: item, index, frame, backBtn, titleEl, open: true, history: [], current: null, url: null };
+      return { kind: "tile", el, obj, owner: item, index, frame, backBtn, closeBtn, titleEl, open: true, history: [], current: null, url: null };
     }
 
     function makeMenu(item) {
       const el = document.createElement("div");
       el.className = "menu";
       el.innerHTML = `
-        <header><h2></h2><span class="x" data-action="close">✕</span></header>
+        <header><h2></h2><span class="x" data-action="close">${ICON.close}</span></header>
         <div class="sub">Ask anything about the 6 pages · /pages &lt;topic&gt; to change them</div>
         <div class="log"></div>
-        <div class="input-row"><input data-action="chat" placeholder="Ask about these pages…" /><span class="send" data-action="send">Send</span></div>`;
+        <div class="input-row"><input data-action="chat" placeholder="Ask about these pages…" /><span class="send" data-action="send">${ICON.send}</span></div>`;
       el.querySelector("h2").textContent = item.data.text;
       const input = el.querySelector("input");
       input.addEventListener("focus", () => { controls.fpsMovement.enable = false; });
@@ -468,7 +615,7 @@
       const pinned = item.cluster.firstFill && item.data.url ? [item.data.url] : [];
       item.cluster.firstFill = false;
       let found = [];
-      try { found = await searchWiki(query); } catch {}
+      try { found = await searchScholar(query); } catch {}
       const urls = [...new Set([...pinned, ...found])].slice(0, 6);
       item.cluster.tiles.forEach((t, i) => setTileUrl(t, urls[i] ?? null));
       return urls;
@@ -569,7 +716,7 @@
     // Angles are measured from the direction towards the label.
     const SPHERE_R = 3.6;          // metres from you — far enough that all six fit in view
     const COLS_DEG = [26, 60];     // right of the label, clear of the words, button and chatbox
-    const ROWS_DEG = [21, 0, -21]; // up / level / down (whole group fits inside the 70° view)
+    const ROWS_DEG = [21.5, 0, -21.5]; // up / level / down (whole group fits inside the 70° view)
 
     function openCluster(item) {
       if (item.cluster) return;
@@ -577,9 +724,10 @@
       const L = new THREE.Vector3(item.data.position[0], item.baseY, item.data.position[2]);
       const t = item.toward;
 
-      // Chatbox hangs just below the words.
+      // Chatbox: part of the moving group (left of the screens); when the group
+      // is left in place (F) it hangs just below the label's words instead.
       const menu = makeMenu(item);
-      menu.pos.copy(L).setY(L.y - item.sprite.scale.y / 2 - 0.08);
+      menu.homePos = L.clone().setY(L.y - item.sprite.scale.y / 2 - 0.08);
 
       const tiles = [];
       for (const col of COLS_DEG) {
@@ -590,15 +738,14 @@
           tiles.push(tile);
         }
       }
-      // Fixed-mode layout (F off): a viewing spot in front of the label.
-      // Follow mode (the default) re-centres this on you every frame.
-      const C = L.clone().addScaledVector(t, SPHERE_R).setY(camera.position.y);
+      // The group is laid out around you, oriented once — towards the label as
+      // seen from where you opened it — and never re-oriented after that.
       item.cluster = {
         menu, tiles, firstFill: true, history: [], busy: false, label: L,
-        center: followMode ? camera.position.clone() : C,
-        toLabel: followMode ? flatDirTo(camera.position, L, t.clone().negate()) : t.clone().negate(),
+        center: camera.position.clone(),
+        toLabel: flatDirTo(camera.position, L, t.clone().negate()),
       };
-      placeTiles(item.cluster, followMode ? camera.position : C);
+      placeGroup(item.cluster);
       updateCloseHud();
       botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Ask me anything about them.`);
       fillTiles(item, item.data.query ?? item.data.text);
@@ -613,27 +760,44 @@
     // Put every page on the sphere around cluster.center, laid out relative to
     // the direction towards the label, each turned to face `faceTarget`.
     const UP = new THREE.Vector3(0, 1, 0);
-    function placeTiles(cluster, faceTarget) {
+    // Unit direction at (th, ph) radians: th to the right of the label
+    // direction, ph above the horizon.
+    function groupDir(cluster, th, ph) {
       const f = cluster.toLabel;
       const r = new THREE.Vector3(-f.z, 0, f.x); // to your right when facing the label
+      return f.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th))
+        .multiplyScalar(Math.cos(ph)).addScaledVector(UP, Math.sin(ph)).normalize();
+    }
+
+    // Lay the screens (and, when moving with you, the chatbox) out on the
+    // sphere around cluster.center. Screens face `faceTarget` (default: the
+    // centre, i.e. you).
+    const MENU_EL = THREE.MathUtils.degToRad(11); // chatbox top edge, above the horizon
+    function placeGroup(cluster, faceTarget = cluster.center) {
       for (const tile of cluster.tiles) {
-        const dir = f.clone().multiplyScalar(Math.cos(tile.th)).addScaledVector(r, Math.sin(tile.th))
-          .multiplyScalar(Math.cos(tile.ph)).addScaledVector(UP, Math.sin(tile.ph)).normalize();
-        tile.obj.position.copy(cluster.center).addScaledVector(dir, SPHERE_R);
+        tile.obj.position.copy(cluster.center).addScaledVector(groupDir(cluster, tile.th, tile.ph), SPHERE_R);
         tile.obj.lookAt(faceTarget);
         tile.obj.updateMatrixWorld();
       }
+      if (followMode) cluster.menu.pos.copy(cluster.center).addScaledVector(groupDir(cluster, 0, MENU_EL), SPHERE_R);
+      else cluster.menu.pos.copy(cluster.menu.homePos);
     }
 
-    // Follow mode (on by default; F toggles): the pages stay around you as
-    // you walk, keep their place relative to the label, and face you.
-    let followMode = false; // pages stay in place (but face you); F makes them follow
+    // Moving with you (on by default; F toggles): the whole group — screens and
+    // chatbox — slides with you as one rigid piece. It never turns, so from
+    // where you stand the arrangement never changes and screens can't slide in
+    // front of each other. With F off, the screens stay put and face you.
+    let followMode = true;
 
     // Close button pinned to the screen while pages are open (and the X key).
     const closeHud = document.getElementById("close-hud");
     const openItem = () => items.find((it) => it.cluster);
     function updateCloseHud() {
-      for (const x of items) x.orb.el.textContent = x.cluster ? "×" : "+"; // world button: × while open
+      for (const x of items) { // world button: × while open
+        x.orb.el.innerHTML = x.cluster ? ICON.close : ICON.plus;
+        x.orb.el.dataset.state = x.cluster ? "close" : "open";
+        x.orb.el.classList.toggle("open", !!x.cluster);
+      }
       const it = openItem();
       closeHud.hidden = !it;
       if (it) closeHud.querySelector(".label").textContent = `Close “${it.data.text}”`;
@@ -677,7 +841,8 @@
         const item = { data, sprite, baseY: data.position[1], phase: i * 1.3, right, toward, cluster: null };
         const orbEl = document.createElement("div");
         orbEl.className = "orb";
-        orbEl.textContent = "+";
+        orbEl.innerHTML = ICON.plus;
+        orbEl.dataset.state = "open";
         item.orb = addSurface(orbEl, "orb", 64, 0.2, new THREE.Vector3(), { owner: item });
         items.push(item);
       });
@@ -795,8 +960,18 @@
       return best;
     }
 
-    const within = (n, x, y) =>
-      x >= n.offsetLeft && x <= n.offsetLeft + n.offsetWidth && y >= n.offsetTop && y <= n.offsetTop + n.offsetHeight;
+    // Is (x, y) — in the tile's own CSS pixels — inside element n?
+    function within(n, x, y) {
+      let left = 0, top = 0;
+      for (let e = n; e && !e.classList?.contains("tile"); e = e.offsetParent) {
+        left += e.offsetLeft;
+        top += e.offsetTop;
+      }
+      // The orbiter is centred with translateX(-50%); offsetLeft ignores that.
+      const orb = n.closest(".orbiter");
+      if (orb) left -= orb.offsetWidth / 2;
+      return x >= left && x <= left + n.offsetWidth && y >= top && y <= top + n.offsetHeight;
+    }
 
     function aim() {
       const cx = innerWidth / 2, cy = innerHeight / 2;
@@ -805,10 +980,11 @@
       if (hit && (!s || hit.depth < s.depth)) s = hit.tile;
       let link = null, action = null, el = null;
       if (s?.kind === "tile") {
-        if (hit.py < BAR_H) {
-          if (!s.backBtn.hidden && within(s.backBtn, hit.px, hit.py)) { action = "back"; el = s.backBtn; }
+        if (hit.py < ORBIT_H) {
+          if (within(s.closeBtn, hit.px, hit.py)) { action = "close"; el = s.closeBtn; }
+          else if (!s.backBtn.hidden && within(s.backBtn, hit.px, hit.py)) { action = "back"; el = s.backBtn; }
         } else {
-          link = s.frame.contentDocument?.elementFromPoint(hit.px, hit.py - BAR_H)?.closest?.("a[href]") ?? null;
+          link = s.frame.contentDocument?.elementFromPoint(hit.px, hit.py - ORBIT_H)?.closest?.("a[href]") ?? null;
         }
       } else if (s?.kind === "orb") {
         action = "orb"; el = s.el;
@@ -854,6 +1030,10 @@
       const href = a.href; // absolute, thanks to <base>
       if (a.getAttribute("href")?.startsWith("#")) {
         tile.frame.contentDocument.getElementById(decodeURIComponent(a.hash.slice(1)))?.scrollIntoView();
+      } else if (oaId(href)) {
+        loadPage(tile, href); // follow the citation trail inside the screen
+      } else if (oaId(tile.current)) {
+        open(href, "_blank", "noopener"); // DOI / full text: the publisher's site
       } else if (wikiTitle(href) || (/^https:\/\//.test(href) && !wikiTitle(tile.current ?? "") && !/wikipedia\.org/.test(href))) {
         loadPage(tile, href.split("#")[0]);
       } else if (/^https?:\/\//.test(href)) {
@@ -955,11 +1135,11 @@
       if (open) {
         const c = open.cluster;
         if (followMode) {
-          c.center.lerp(camera.position, 0.2);
-          c.toLabel.lerp(flatDirTo(camera.position, c.label, c.toLabel), 0.15).normalize();
+          c.center.copy(camera.position); // rigid: translate only, no turning
+          placeGroup(c);
+        } else {
+          placeGroup(c, camera.position); // stay put, but face you
         }
-        // Either way, every page turns to face you (in place when not following).
-        placeTiles(c, camera.position);
       }
       layout(time);
       aim();
@@ -1036,6 +1216,7 @@
           return inside / 4;
         });
       },
+      tileQuats: (i) => items[i].cluster.tiles.map((t) => t.obj.quaternion.toArray().map((n) => +n.toFixed(4))),
       tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
       state: () => ({
         looking, target: target?.kind ?? null, action: hoverAction, link: hoverLink?.textContent.trim() ?? null,
