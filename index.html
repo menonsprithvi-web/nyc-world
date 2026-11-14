@@ -12,6 +12,25 @@
     .hud p { margin: 2px 0; color: rgba(255,255,255,.7); }
     .hud a { color: #9cf; }
     #status { position: fixed; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.75); pointer-events: none; }
+    .hud { z-index: 2; }
+    /* Layer for 3D-positioned web pages. Clicks pass through to the 3D scene
+       except on the pages themselves. */
+    #pages { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+    .page-panel { width: 800px; height: 560px; border-radius: 18px; overflow: hidden; background: #fff;
+                  box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 20px 60px rgba(0,0,0,.6); pointer-events: auto; }
+    .page-panel { display: flex; flex-direction: column; }
+    .page-panel iframe, .overlay iframe { flex: 1; width: 100%; border: 0; display: block; background: #fff; }
+    .bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px 0 16px; flex: none;
+           background: #14161f; color: #fff; font: 600 17px system-ui, sans-serif; }
+    .bar .title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: rgba(255,255,255,.85); }
+    .bar button { font: 600 15px system-ui, sans-serif; color: #fff; background: #2f6fed; border: 0;
+                  border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    .bar button:hover { background: #4a82f0; }
+    .bar button.secondary { background: rgba(255,255,255,.12); }
+    /* Expanded (full-screen) page */
+    .overlay { position: fixed; inset: 4vh 4vw; z-index: 5; display: flex; flex-direction: column;
+               border-radius: 14px; overflow: hidden; box-shadow: 0 30px 120px rgba(0,0,0,.8); }
+    .overlay-backdrop { position: fixed; inset: 0; z-index: 4; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
   </style>
   <script type="importmap">
     {
@@ -27,14 +46,17 @@
   <div class="hud">
     <h1>Midtown NYC</h1>
     <p>WASD move · drag look · Q/E down/up · Shift faster</p>
-    <p>T add floating text · U undo · C copy labels</p>
+    <p>T add floating text · U undo · C copy labels · P show/hide pages</p>
+    <p>Click a floating page to open it · ✕ or click outside to close</p>
     <p id="quality"></p>
   </div>
+  <div id="pages"></div>
   <div id="status">Loading 3D world…</div>
 
   <script type="module">
     import * as THREE from "three";
     import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
+    import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 
     const world = await (await fetch("./world.json")).json();
     const full = new URLSearchParams(location.search).get("quality") === "full";
@@ -67,10 +89,51 @@
     const controls = new SparkControls({ canvas: renderer.domElement });
     controls.fpsMovement.moveSpeed = 1.5;
 
+    // Web pages live in a separate CSS3D scene layered over the WebGL canvas.
+    const cssScene = new THREE.Scene();
+    const cssRenderer = new CSS3DRenderer({ element: document.getElementById("pages") });
+    cssRenderer.setSize(innerWidth, innerHeight);
+    // Clicking the 3D scene takes keyboard focus back from any page.
+    // The WebGL canvas receives all pointer events, so pages can't be clicked
+    // directly. Instead, a click (not a drag) on top of a page opens it
+    // full-screen, where it is fully interactive.
+    let downAt = null;
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      downAt = { x: e.clientX, y: e.clientY };
+    });
+    renderer.domElement.addEventListener("pointerup", (e) => {
+      if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
+      const hit = panelAt(e.clientX, e.clientY);
+      if (hit) expand(hit.userData.url, hit.userData.title);
+    });
+    renderer.domElement.addEventListener("pointermove", (e) => {
+      renderer.domElement.style.cursor = panelAt(e.clientX, e.clientY) ? "pointer" : "";
+    });
+
+    // Front-most visible page under the given screen point, if any.
+    function panelAt(x, y) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const p of panels) {
+        if (!p.visible) continue;
+        const ndc = p.position.clone().project(camera);
+        if (ndc.z > 1 || ndc.z < -1) continue; // behind the camera
+        const r = p.element.getBoundingClientRect();
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+        const d = p.position.distanceTo(camera.position);
+        if (d < bestDist) {
+          best = p;
+          bestDist = d;
+        }
+      }
+      return best;
+    }
+
     addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
+      cssRenderer.setSize(innerWidth, innerHeight);
     });
 
     // ---------- Floating text ----------
@@ -111,25 +174,109 @@
 
     // Default labels. Positions are [x, y, z] relative to the starting
     // viewpoint: -z is straight ahead, +x is right, +y is up.
+    // `url` (optional) shows a live web page under the label; `pageWidth` is
+    // its width in metres. Only sites that allow embedding will display.
+    const WIKI = "https://en.wikipedia.org/wiki/";
     const DEFAULT_LABELS = [
-      { text: "Midtown Manhattan", position: [0, 3.2, -9], size: 2, color: "#ffffff" },
+      { text: "Midtown Manhattan", position: [0, 3.2, -9], size: 2, color: "#ffffff",
+        url: WIKI + "Midtown_Manhattan", pageWidth: 3.2 },
       // Cars, estimated from where they sit in the panorama
       // (left yellow cab, center yellow cab, white sedan on the right).
-      { text: "car", position: [-5.5, 0.15, -7.1], size: 1.3, color: "#ffd84a" },
-      { text: "car", position: [2.2, 0.15, -8.7], size: 1.3, color: "#ffd84a" },
-      { text: "car", position: [7.4, 0.15, -3.1], size: 1.3, color: "#ffffff" },
-      { text: "🌭 Street vendors", position: [-5, 1.8, 4], size: 1, color: "#ff8a8a" },
-      { text: "✨ Generated with World Labs Marble", position: [0, 0.9, -4], size: 0.7, color: "#9fd4ff" },
+      { text: "car", position: [-5.5, 0.15, -7.1], size: 1.3, color: "#ffd84a",
+        url: WIKI + "Taxicabs_of_New_York_City", pageWidth: 1.4 },
+      { text: "car", position: [2.2, 0.15, -8.7], size: 1.3, color: "#ffd84a",
+        url: WIKI + "Taxicabs_of_New_York_City", pageWidth: 1.4 },
+      { text: "car", position: [7.4, 0.15, -3.1], size: 1.3, color: "#ffffff",
+        url: WIKI + "Car", pageWidth: 1.4 },
+      { text: "🌭 Street vendors", position: [-5, 1.8, 4], size: 1, color: "#ff8a8a",
+        url: WIKI + "Hot_dog_cart", pageWidth: 1.6 },
+      { text: "✨ Generated with World Labs Marble", position: [3.5, 0.2, -4], size: 0.7, color: "#9fd4ff",
+        url: "https://sparkjs.dev/", pageWidth: 1.2 },
     ];
-    const STORE = "nyc-world-labels";
+    const STORE = "nyc-world-labels-v2";
     let labels = JSON.parse(localStorage.getItem(STORE) ?? "null") ?? DEFAULT_LABELS;
     const sprites = [];
+    const panels = [];
+    let pagesVisible = true;
+
+    // A live web page as a 3D panel. The DOM element is 800×560 px; scaling
+    // it down turns pixels into metres.
+    function makeFrame(url) {
+      const iframe = document.createElement("iframe");
+      // Wikipedia's mobile skin reads far better in a small panel.
+      if (/^https:\/\/[a-z]+\.wikipedia\.org\/wiki\//.test(url) && !url.includes("useskin=")) {
+        url += (url.includes("?") ? "&" : "?") + "useskin=minerva";
+      }
+      iframe.src = url;
+      iframe.referrerPolicy = "no-referrer";
+      // Pages run sandboxed: scripts, links and forms work, but they can't
+      // touch this page.
+      iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-forms");
+      return iframe;
+    }
+
+    function makeBar(title, buttons) {
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const t = document.createElement("span");
+      t.className = "title";
+      t.textContent = title;
+      bar.appendChild(t);
+      for (const [label, onClick, cls] of buttons) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        if (cls) b.className = cls;
+        b.addEventListener("click", onClick);
+        bar.appendChild(b);
+      }
+      return bar;
+    }
+
+    // Open a page full-screen so it's comfortable to read and use.
+    let overlay = null;
+    function closeOverlay() {
+      overlay?.forEach((n) => n.remove());
+      overlay = null;
+    }
+    function expand(url, title) {
+      closeOverlay();
+      const backdrop = document.createElement("div");
+      backdrop.className = "overlay-backdrop";
+      backdrop.addEventListener("click", closeOverlay);
+      const box = document.createElement("div");
+      box.className = "overlay";
+      box.append(
+        makeBar(title, [
+          ["Open in new tab ↗", () => open(url, "_blank", "noopener"), "secondary"],
+          ["Close ✕", closeOverlay],
+        ]),
+        makeFrame(url),
+      );
+      document.body.append(backdrop, box);
+      overlay = [backdrop, box];
+    }
+
+    function makePanel(url, widthMetres, title) {
+      const el = document.createElement("div");
+      el.className = "page-panel";
+      el.append(makeBar(`${title} — click to open`, []), makeFrame(url));
+      const obj = new CSS3DObject(el);
+      obj.scale.setScalar(widthMetres / 800);
+      obj.userData.height = (560 * widthMetres) / 800;
+      obj.userData.url = url;
+      obj.userData.title = title;
+      return obj;
+    }
 
     function renderLabels() {
       for (const s of sprites.splice(0)) {
         scene.remove(s);
         s.material.map.dispose();
         s.material.dispose();
+      }
+      for (const p of panels.splice(0)) {
+        cssScene.remove(p);
+        p.element.remove();
       }
       labels.forEach((l, i) => {
         const s = makeLabel(l);
@@ -138,28 +285,52 @@
         s.userData.phase = i * 1.3;
         scene.add(s);
         sprites.push(s);
+
+        if (l.url) {
+          const p = makePanel(l.url, l.pageWidth ?? 1.6, l.text);
+          // Hang the page just below the label.
+          const gap = 0.1;
+          const baseY = l.position[1] - s.scale.y / 2 - gap - p.userData.height / 2;
+          p.position.set(l.position[0], baseY, l.position[2]);
+          p.userData.baseY = baseY;
+          p.userData.phase = s.userData.phase;
+          p.visible = pagesVisible;
+          p.element.style.display = pagesVisible ? "" : "none";
+          cssScene.add(p);
+          panels.push(p);
+        }
       });
     }
     const saveLabels = () => localStorage.setItem(STORE, JSON.stringify(labels));
     renderLabels();
 
     addEventListener("keydown", async (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey) return;
+      if (e.key === "Escape") return closeOverlay();
+      if (overlay || e.repeat || e.metaKey || e.ctrlKey) return;
       const key = e.key.toLowerCase();
       if (key === "t") {
         // Place text 3m in front of wherever you're looking.
         const text = prompt("Floating text:");
         if (!text?.trim()) return;
+        const pageUrl = prompt("Web page to show below it (optional, https://…):")?.trim();
         const dir = new THREE.Vector3();
         camera.getWorldDirection(dir);
         const p = camera.position.clone().addScaledVector(dir, 3);
-        labels = [...labels, { text: text.trim(), position: p.toArray().map((n) => +n.toFixed(2)), size: 1, color: "#ffffff" }];
+        const label = { text: text.trim(), position: p.toArray().map((n) => +n.toFixed(2)), size: 1, color: "#ffffff" };
+        if (pageUrl && /^https:\/\//.test(pageUrl)) Object.assign(label, { url: pageUrl, pageWidth: 1.6 });
+        labels = [...labels, label];
         saveLabels();
         renderLabels();
       } else if (key === "u" && labels.length) {
         labels = labels.slice(0, -1);
         saveLabels();
         renderLabels();
+      } else if (key === "p") {
+        pagesVisible = !pagesVisible;
+        for (const p of panels) {
+          p.visible = pagesVisible;
+          p.element.style.display = pagesVisible ? "" : "none";
+        }
       } else if (key === "c") {
         // Paste the result into DEFAULT_LABELS to make your labels permanent.
         const json = JSON.stringify(labels, null, 2);
@@ -174,7 +345,13 @@
       // Gentle floating bob
       const t = time / 1000;
       for (const s of sprites) s.position.y = s.userData.baseY + Math.sin(t * 1.2 + s.userData.phase) * 0.08;
+      for (const p of panels) {
+        p.position.y = p.userData.baseY + Math.sin(t * 1.2 + p.userData.phase) * 0.08;
+        // Turn to face the viewer, staying upright.
+        p.lookAt(camera.position.x, p.position.y, camera.position.z);
+      }
       renderer.render(scene, camera);
+      cssRenderer.render(cssScene, camera);
     });
   </script>
 </body>
