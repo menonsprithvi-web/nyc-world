@@ -779,14 +779,21 @@
           tiles.push(tile);
         }
       }
-      // The group is laid out around you, oriented once — towards the label as
-      // seen from where you opened it — and never re-oriented after that.
-      item.cluster = {
-        menu, tiles, groupClose, firstFill: true, history: [], busy: false, label: L,
-        center: camera.position.clone(),
-        toLabel: flatDirTo(camera.position, L, t.clone().negate()),
-      };
-      placeGroup(item.cluster);
+      // The group is laid out around where you open it, as one curved display.
+      // Its middle (the anchor) stays fixed in the world; as you walk, the whole
+      // display swivels about the anchor to face you, so its layout never
+      // changes and no screen ends up behind another.
+      const center0 = camera.position.clone();
+      const toLabel0 = flatDirTo(camera.position, L, t.clone().negate());
+      const c = { menu, tiles, groupClose, firstFill: true, history: [], busy: false, label: L,
+                  center: center0.clone(), toLabel: toLabel0.clone() };
+      const midDir = groupDir(c, THREE.MathUtils.degToRad(GROUP_MID_DEG), 0);
+      c.anchor = center0.clone().addScaledVector(midDir, SPHERE_R).setY(center0.y);
+      c.toLabel0 = toLabel0;
+      c.fromAnchor0 = midDir.clone().negate(); // horizontal: anchor → viewer at open
+      c.yaw = 0;
+      item.cluster = c;
+      placeGroup(c);
       updateCloseHud();
       botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Ask me anything about them.`);
       fillTiles(item, item.data.query ?? item.data.text);
@@ -824,8 +831,26 @@
       cluster.menu.pos.copy(cluster.center).addScaledVector(groupDir(cluster, 0, MENU_EL), SPHERE_R);
       cluster.groupClose.pos.copy(cluster.menu.pos).setY(cluster.menu.pos.y + 0.22);
     }
-    // The group is placed once, where you open it, and never moves. As you walk,
-    // each screen only turns to face you (the chat panel and buttons always do).
+    // Middle of the arrangement (chat at 0°, screens out to 60°): the pivot.
+    const GROUP_MID_DEG = (0 + COLS_DEG[COLS_DEG.length - 1]) / 2;
+
+    // Turn the whole display about its fixed anchor so it faces you. Only the
+    // yaw changes (smoothed so it glides); size, height and layout stay the same.
+    function swivelGroup(c) {
+      const d = new THREE.Vector3(camera.position.x - c.anchor.x, 0, camera.position.z - c.anchor.z);
+      if (d.lengthSq() > 0.25) {
+        d.normalize();
+        const u = c.fromAnchor0;
+        const target = Math.atan2(u.z * d.x - u.x * d.z, u.x * d.x + u.z * d.z); // signed angle u → d
+        let delta = target - c.yaw;
+        delta = Math.atan2(Math.sin(delta), Math.cos(delta)); // shortest way round
+        c.yaw += delta * 0.2;
+      }
+      c.toLabel.copy(c.toLabel0).applyAxisAngle(UP, c.yaw);
+      c.center.copy(c.anchor).addScaledVector(c.fromAnchor0.clone().applyAxisAngle(UP, c.yaw), SPHERE_R)
+        .setY(c.anchor.y);
+      placeGroup(c); // screens face the display's own centre, keeping its curve
+    }
 
     // Close button pinned to the screen while pages are open (and the X key).
     const closeHud = document.getElementById("close-hud");
@@ -1168,7 +1193,7 @@
       camera.updateMatrixWorld();
       // Open screens stay where they are and turn to face you.
       const open = openItem();
-      if (open) placeGroup(open.cluster, camera.position);
+      if (open) swivelGroup(open.cluster);
       layout(time);
       aim();
       renderer.render(scene, camera);
@@ -1253,6 +1278,7 @@
       },
       tileSources: (i) => items[i].cluster.tiles.map((t) =>
         oaId(t.current ?? t.url) ? "paper" : wikiTitle(t.current ?? t.url ?? "") ? "encyclopedia" : "web"),
+      anchor: (i) => items[i].cluster.anchor.toArray().map((n) => +n.toFixed(3)),
       tileQuats: (i) => items[i].cluster.tiles.map((t) => t.obj.quaternion.toArray().map((n) => +n.toFixed(4))),
       tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
       state: () => ({

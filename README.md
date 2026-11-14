@@ -37,8 +37,9 @@ Controls:
     mentions zoning"*, *"show me sources about urban heat islands instead"*, or `/pages <topic>`.
     Other sites are fetched by the local server and shown as a clean, script-free reading view;
     a few sites refuse automated requests and show a short error instead.
-  - The screens, chat panel and a **close button** appear around you where you open them and
-    **stay in that place**. As you walk, each screen turns to face you.
+  - The screens, chat panel and a **close button** form one curved display that **stays where you
+    opened it**. As you walk, the **whole display turns together to face you** (it swivels about its
+    own centre), so its layout never changes and no screen ends up behind another.
 - **Aim the dot** at a screen: the **mouse wheel** scrolls it, **click** follows the link under the
   dot, **Back** in the screen's toolbar goes back.
 - To close: the **✕** at the top-right of any screen, the close button above the chat panel, the
