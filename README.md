@@ -21,17 +21,18 @@ and open the published URL.
 
 Controls:
 
-- **Click** the scene to look around with the mouse (a dot marks the centre), **Esc** to release
+- **Click** the scene to look around with the mouse (a small dot marks the centre), **Esc** to release
 - **WASD** move · **Q/E** down/up · **Shift** faster
-- Web pages stay **closed boxes** until you're close enough to read them, then open automatically
-  (and close again when you walk away) to keep the scene uncluttered.
-- **Aim the dot** at an open page: the **mouse wheel** scrolls it, the link under the dot is
-  highlighted, and **click** follows it inside the panel. Aim at **◀ Back** and click to go back.
-- **T** add floating text (optionally with a web page under it) · **U** undo · **C** copy labels ·
-  **P** show/hide pages
+- Each floating label has a round **＋ button** beside it. Aim the dot at it and **click** to open:
+  - a **menu** with a **chatbox** — aim at the box, click, type a topic and press **Enter**, and the
+    pages change to that topic (click the scene to go back to looking around)
+  - **6 web pages** in a 2 × 3 grid to the right, facing you and curving towards you
+- **Aim the dot** at a page: the **mouse wheel** scrolls it, **click** follows the link under the dot,
+  **◀ Back** goes back. Click the button again (now **×**) or the menu's ✕ to close.
+- **T** add a label (with an optional topic) · **U** undo · **P** hide/show everything
 
-Pages are shown as clean, script-free reading views (fetched as HTML) so the crosshair can drive
-them. Wikipedia works well; other sites only work if they allow cross-origin fetching.
+Pages are clean, script-free reading views fetched from Wikipedia (or any site that allows
+cross-origin fetching), so the crosshair can drive them.
 
 Add `?quality=full` to the URL to stream the full-resolution splat (~69 MB) from the
 World Labs CDN instead of the bundled 500k version (~8 MB).
