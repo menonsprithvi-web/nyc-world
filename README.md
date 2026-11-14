@@ -30,16 +30,30 @@ Claude Agent SDK with **this machine's own Claude Code login** (no API key is st
 `claude` must be installed and logged in. Without the server (e.g. `python3 -m http.server`), the
 world still works but the chat can't answer questions.
 
-## Telem AI: routed, trust-filtered sources
+## Telem AI: planned, routed, trust-filtered research
 
-With a [Telem](https://telem.ai) key in `.env` (`TELEM_API_KEY=…`, git-ignored), each label's six screens
-start from a Telem search that is **auto-routed across many engines** (e.g. Exa, Tavily, Brave,
-Parallel, …). The server then **scores every result for trust** — government, university,
-intergovernmental, peer-reviewed publisher, museum/library, encyclopedia, reputable news — drops
-social media, forums and unknown sites, and keeps at most two pages per site. Each screen shows its
-**trust badge** (e.g. "Government · 95") and the chat reports what was routed, found, kept and
-dropped. Pages that block ordinary fetches are read through **Telem Fetch**. Without a key, the
-screens fall back to Wikipedia + OpenAlex.
+With a [Telem](https://telem.ai) key in `.env` (`TELEM_API_KEY=…`, git-ignored):
+
+- **Search plan per label.** Each label's topic becomes four Telem searches run in parallel, each
+  auto-routed across many engines (Exa, Tavily, Brave, Parallel, Ceramic, Seltz, You…) with its own
+  settings: **overview** (all engines), **official** (`include_domains`: 20 government /
+  intergovernmental sites), **research** (20 journals and universities), **news** (14 reputable
+  outlets, `published_after` the last 12 months).
+- **Trust filter.** Every result is scored (government, university, intergovernmental,
+  peer-reviewed publisher, museum/library, encyclopedia, reputable news); social media, forums and
+  unknown sites are dropped, duplicates merged, at most two pages per site. Screens are picked
+  round-robin across the plan's steps and show a **trust badge**.
+- **Search trace panel.** Shows each step's engines, time, and found → kept counts.
+- **Chat researches with Telem.** Claude's only research tools are `telem_search` (with a focus:
+  general / official / research / news) and `telem_fetch`; every call appears live in the chat and
+  the trace panel.
+- **Telem Fetch** reads pages our own reader can't (blocked or script-heavy sites).
+- **Watch a topic** (👁 in the chat panel) creates a **Telem Monitor** that checks hourly for 7 days;
+  new trustworthy sources appear as a red badge on the label's ＋.
+
+Without a key, screens fall back to Wikipedia + OpenAlex and the chat uses web search.
+
+A recorded walkthrough of every feature is in the project's demo video.
 
 Controls:
 
