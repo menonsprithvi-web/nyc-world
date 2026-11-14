@@ -48,16 +48,14 @@
     .icon { width: 1em; height: 1em; display: block; fill: none; stroke: currentColor;
             stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-    /* Round action button next to each label (FAB style) */
-    .orb { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center;
-           background: var(--primary-container); color: var(--on-primary-container); font-size: 30px;
-           box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    /* Round clear buttons (label + / ×, and the close button in the group) */
+    .orb { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 30px;
+           background: rgba(255,255,255,.12); color: #fff; border: 2.5px solid rgba(255,255,255,.9);
+           backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgba(0,0,0,.35);
            /* Never transition `transform`: it is rewritten every frame to place the
               button, and animating it makes the button trail behind (dodge the dot). */
-           transition: background .12s, color .12s, box-shadow .12s, border-radius .12s; }
-    .orb.open { background: var(--surface-high); color: var(--on-surface); border-radius: 50%; }
-    .orb.hover { background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 4px rgba(168,199,250,.35), 0 8px 24px rgba(0,0,0,.5); }
-
+           transition: background .12s, color .12s, box-shadow .12s; }
+    .orb.hover { background: #fff; color: #111; box-shadow: 0 0 0 5px rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.45); }
     /* Chat panel */
     .menu { position: relative; width: 480px; height: 500px; display: flex; flex-direction: column;
             border-radius: var(--radius-panel); overflow: hidden; background: var(--surface);
@@ -409,17 +407,43 @@
             `<p class="source">From Wikipedia, the free encyclopedia (CC BY-SA 4.0).</p></body></html>`,
         };
       }
-      const res = await fetch(pageUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Any other site: the local server fetches it (browsers block most
+      // cross-site fetches); we keep just the main content, without scripts.
+      const res = await fetch("/api/fetch?url=" + encodeURIComponent(pageUrl));
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+      const finalUrl = res.headers.get("x-final-url") || pageUrl;
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
-      doc.querySelectorAll("script, noscript, iframe").forEach((n) => n.remove());
-      const base = doc.createElement("base");
-      base.href = res.url;
-      doc.head.prepend(base);
-      const style = doc.createElement("style");
-      style.textContent = "a.xhair-hover { background: #ffe98a; outline: 3px solid #f5b400; border-radius: 3px; color: #111; } mark.xhl { background: #7cf0a8; color: #111; padding: 2px 3px; border-radius: 4px; box-shadow: 0 0 0 3px #2fbf71; }";
-      doc.head.append(style);
-      return { title: doc.title || pageUrl, html: "<!doctype html>" + doc.documentElement.outerHTML };
+      doc.querySelectorAll("script, noscript, iframe, style, link, nav, header, footer, aside, form, button, svg, [role=navigation], [aria-hidden=true]")
+        .forEach((n) => n.remove());
+      // Drop page furniture by name (menus, search, breadcrumbs, banners…).
+      const JUNK = /(^|[-_\s])(nav|navbar|menu|header|footer|breadcrumbs?|search|skip|banner|social|share|cookie|subscribe|promo|sidebar|toolbar|utility|language|logo)([-_\s]|$)/i;
+      doc.querySelectorAll("[class], [id]").forEach((n) => {
+        if (n.isConnected && n !== doc.body && JUNK.test(`${n.id} ${n.className}`)) n.remove();
+      });
+      // Pick the main content the way reader modes do: credit each paragraph's
+      // text to its parent (and half to its grandparent); the top scorer wins.
+      const scores = new Map();
+      for (const p of doc.body.querySelectorAll("p, li, dd, blockquote")) {
+        const len = p.textContent.trim().length;
+        if (len < 40) continue;
+        const parent = p.parentElement, grand = parent?.parentElement;
+        if (parent) scores.set(parent, (scores.get(parent) ?? 0) + len);
+        if (grand) scores.set(grand, (scores.get(grand) ?? 0) + len / 2);
+      }
+      let main = doc.querySelector("article, main, [role=main]") ?? doc.body;
+      let best = 0;
+      for (const [el, sc] of scores) if (sc > best) { best = sc; main = el; }
+      // Prefer a semantic wrapper around the winner if there is one.
+      main = main.closest("article, main, [role=main]") ?? main;
+      main.querySelectorAll("img:not([src]), img[src=''], select, input").forEach((n) => n.remove());
+      const pageTitle = doc.querySelector("h1")?.textContent.trim() || doc.title || pageUrl;
+      const host = new URL(finalUrl).hostname.replace(/^www\./, "");
+      return {
+        title: pageTitle,
+        html: `<!doctype html><html><head><meta charset="utf-8"><base href="${esc(finalUrl)}"><style>${READER_CSS}</style></head>
+          <body><div class="chips"><span class="chip">${esc(host)}</span></div>${main?.innerHTML ?? ""}
+          <p class="source">Source: <a href="${esc(finalUrl)}">${esc(finalUrl)}</a></p></body></html>`,
+      };
     }
 
     const niceTitle = (u) => titleCache.get(u) ?? (oaId(u) ? "Paper" : decodeURIComponent((wikiTitle(u) ?? u).replace(/_/g, " ")));
@@ -500,14 +524,18 @@
       for (const a of actions) {
         const screen = Number(a?.screen);
         const t = tiles[screen - 1];
-        if (a?.type === "open" && t && typeof (a.query ?? a.page) === "string") {
-          const q = (a.query ?? a.page).trim();
-          const pageUrl = (await searchScholar(q, 1).catch(() => []))[0];
-          if (!pageUrl) { notes.push(`↳ couldn't find a paper for “${q}”`); continue; }
+        if (a?.type === "open" && t && (typeof a.url === "string" || typeof (a.query ?? a.page) === "string")) {
+          let pageUrl = null;
+          if (typeof a.url === "string" && /^https?:\/\//.test(a.url)) pageUrl = a.url.trim();
+          else {
+            const q = (a.query ?? a.page).trim();
+            pageUrl = (await searchScholar(q, 1).catch(() => []))[0];
+            if (!pageUrl) { notes.push(`↳ couldn't find a paper for “${q}”`); continue; }
+          }
           const loaded = waitForLoad(t);
           await loadPage(t, pageUrl);
           await loaded;
-          notes.push(`↳ opened “${niceTitle(pageUrl)}” on screen ${screen}`);
+          notes.push(`↳ opened “${t.titleEl.textContent || niceTitle(pageUrl)}” on screen ${screen}`);
         } else if (a?.type === "find" && t && typeof a.text === "string") {
           const found = highlightText(t, a.text);
           notes.push(found
@@ -615,7 +643,17 @@
       const pinned = item.cluster.firstFill && item.data.url ? [item.data.url] : [];
       item.cluster.firstFill = false;
       let found = [];
-      try { found = await searchScholar(query); } catch {}
+      // Interleave encyclopedia articles (Wikipedia, with its citations) and
+      // scholarly papers (OpenAlex), topping up from whichever has more.
+      const [wiki, papers] = await Promise.all([
+        searchWiki(query, 6).catch(() => []),
+        searchScholar(query, 6).catch(() => []),
+      ]);
+      for (let i = 0; found.length < 6 && (i < wiki.length || i < papers.length); i++) {
+        if (i < 3 && wiki[i]) found.push(wiki[i]);
+        if (i < 3 && papers[i]) found.push(papers[i]);
+      }
+      for (const u of [...wiki.slice(3), ...papers.slice(3)]) if (found.length < 6) found.push(u);
       const urls = [...new Set([...pinned, ...found])].slice(0, 6);
       item.cluster.tiles.forEach((t, i) => setTileUrl(t, urls[i] ?? null));
       return urls;
@@ -728,6 +766,11 @@
       // is left in place (F) it hangs just below the label's words instead.
       const menu = makeMenu(item);
       menu.homePos = L.clone().setY(L.y - item.sprite.scale.y / 2 - 0.08);
+      // A close button that moves with the group (sits above the chat panel).
+      const gcEl = document.createElement("div");
+      gcEl.className = "orb";
+      gcEl.innerHTML = ICON.close;
+      const groupClose = addSurface(gcEl, "orb", 64, 0.22, new THREE.Vector3(), { owner: item, groupClose: true });
 
       const tiles = [];
       for (const col of COLS_DEG) {
@@ -741,7 +784,7 @@
       // The group is laid out around you, oriented once — towards the label as
       // seen from where you opened it — and never re-oriented after that.
       item.cluster = {
-        menu, tiles, firstFill: true, history: [], busy: false, label: L,
+        menu, tiles, groupClose, firstFill: true, history: [], busy: false, label: L,
         center: camera.position.clone(),
         toLabel: flatDirTo(camera.position, L, t.clone().negate()),
       };
@@ -781,6 +824,9 @@
       }
       if (followMode) cluster.menu.pos.copy(cluster.center).addScaledVector(groupDir(cluster, 0, MENU_EL), SPHERE_R);
       else cluster.menu.pos.copy(cluster.menu.homePos);
+      // Close button: just above the chat panel's top edge, in the same place
+      // relative to the group wherever you go.
+      cluster.groupClose.pos.copy(cluster.menu.pos).setY(cluster.menu.pos.y + 0.22);
     }
 
     // Moving with you (on by default; F toggles): the whole group — screens and
@@ -809,14 +855,16 @@
 
     function closeCluster(item) {
       if (!item.cluster) return;
-      const { menu, tiles } = item.cluster;
-      menu.el.remove();
-      surfaces.splice(surfaces.indexOf(menu), 1);
+      const { menu, tiles, groupClose } = item.cluster;
+      for (const sf of [menu, groupClose]) {
+        sf.el.remove();
+        surfaces.splice(surfaces.indexOf(sf), 1);
+      }
       for (const t of tiles) {
         cssScene.remove(t.obj);
         t.el.remove();
       }
-      if (target && (target === menu || tiles.includes(target))) target = null;
+      if (target && (target === menu || target === groupClose || tiles.includes(target))) target = null;
       item.cluster = null;
       updateCloseHud();
     }
@@ -857,7 +905,7 @@
         it.sprite.visible = uiVisible;
         if (it.cluster) for (const tl of it.cluster.tiles) tl.obj.visible = uiVisible;
         // Orb sits just right of the words, vertically centred on them.
-        it.orb.pos.set(it.data.position[0], y + 0.1, it.data.position[2])
+        if (it.orb) it.orb.pos.set(it.data.position[0], y + 0.1, it.data.position[2])
           .addScaledVector(it.right, it.sprite.scale.x / 2 + 0.18);
       }
       const halfH = innerHeight / 2;
@@ -1034,6 +1082,9 @@
         loadPage(tile, href); // follow the citation trail inside the screen
       } else if (oaId(tile.current)) {
         open(href, "_blank", "noopener"); // DOI / full text: the publisher's site
+      } else if (tile.current && !wikiTitle(tile.current) && /^https?:/.test(href) &&
+                 new URL(href).hostname === new URL(tile.current).hostname) {
+        loadPage(tile, href.split("#")[0]); // stay on the same trusted site inside the screen
       } else if (wikiTitle(href) || (/^https:\/\//.test(href) && !wikiTitle(tile.current ?? "") && !/wikipedia\.org/.test(href))) {
         loadPage(tile, href.split("#")[0]);
       } else if (/^https?:\/\//.test(href)) {
@@ -1216,6 +1267,15 @@
           return inside / 4;
         });
       },
+      groupCloseEl: (i) => items[i].cluster?.groupClose.el,
+      openOnScreen: (i, k, pageUrl) => loadPage(items[i].cluster.tiles[k], pageUrl),
+      groupSnapshot(i) {
+        const c = items[i].cluster;
+        const r = (v) => v.toArray().map((n) => +n.toFixed(2));
+        return { tiles: c.tiles.map((t) => r(t.obj.position)), menu: r(c.menu.pos), close: r(c.groupClose.pos) };
+      },
+      tileSources: (i) => items[i].cluster.tiles.map((t) =>
+        oaId(t.current ?? t.url) ? "paper" : wikiTitle(t.current ?? t.url ?? "") ? "encyclopedia" : "web"),
       tileQuats: (i) => items[i].cluster.tiles.map((t) => t.obj.quaternion.toArray().map((n) => +n.toFixed(4))),
       tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
       state: () => ({
