@@ -136,7 +136,6 @@
     #close-hud .x { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px;
                     background: var(--surface-highest); }
     .hud-pill kbd { font: 500 12px var(--font); padding: 3px 8px; border-radius: 8px; background: var(--surface-highest); color: var(--on-surface-var); }
-    #follow-hud { top: 74px; right: 18px; padding: 0 16px; height: 40px; font-weight: 400; color: var(--on-surface-var); }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" />
@@ -154,7 +153,7 @@
   <div class="hud">
     <h1>Midtown NYC</h1>
     <p>Click to look around · Esc to release · WASD move · Q/E down/up · Shift faster</p>
-    <p>Aim the dot at a ◯ button and click to open its pages · X close · F pages follow you · chat under the words answers questions</p>
+    <p>Aim the dot at a ◯ button and click to open its pages · X close · chat under the words answers questions</p>
     <p>On a page: wheel scrolls, click follows a link · T add label · U undo · P hide/show</p>
     <p id="quality"></p>
   </div>
@@ -163,7 +162,6 @@
   <div id="crosshair"></div>
   <div id="hint"></div>
   <div id="close-hud" class="hud-pill" hidden><span class="x"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="label">Close</span><kbd>X</kbd></div>
-  <div id="follow-hud" class="hud-pill" hidden></div>
   <div id="status">Loading 3D world…</div>
 
   <script type="module">
@@ -822,18 +820,12 @@
         tile.obj.lookAt(faceTarget);
         tile.obj.updateMatrixWorld();
       }
-      if (followMode) cluster.menu.pos.copy(cluster.center).addScaledVector(groupDir(cluster, 0, MENU_EL), SPHERE_R);
-      else cluster.menu.pos.copy(cluster.menu.homePos);
-      // Close button: just above the chat panel's top edge, in the same place
-      // relative to the group wherever you go.
+      // Chat panel on the left of the screens; close button just above it.
+      cluster.menu.pos.copy(cluster.center).addScaledVector(groupDir(cluster, 0, MENU_EL), SPHERE_R);
       cluster.groupClose.pos.copy(cluster.menu.pos).setY(cluster.menu.pos.y + 0.22);
     }
-
-    // Moving with you (on by default; F toggles): the whole group — screens and
-    // chatbox — slides with you as one rigid piece. It never turns, so from
-    // where you stand the arrangement never changes and screens can't slide in
-    // front of each other. With F off, the screens stay put and face you.
-    let followMode = true;
+    // The group is placed once, where you open it, and never moves. As you walk,
+    // each screen only turns to face you (the chat panel and buttons always do).
 
     // Close button pinned to the screen while pages are open (and the X key).
     const closeHud = document.getElementById("close-hud");
@@ -847,10 +839,7 @@
       const it = openItem();
       closeHud.hidden = !it;
       if (it) closeHud.querySelector(".label").textContent = `Close “${it.data.text}”`;
-      followHud.textContent = `F · pages follow you: ${followMode ? "on" : "off"}`;
-      followHud.hidden = !it;
     }
-    const followHud = document.getElementById("follow-hud");
     closeHud.addEventListener("click", () => { const it = openItem(); if (it) closeCluster(it); });
 
     function closeCluster(item) {
@@ -1165,9 +1154,6 @@
         buildAll();
       } else if (key === "x" && openItem()) {
         closeCluster(openItem());
-      } else if (key === "f") {
-        followMode = !followMode;
-        updateCloseHud();
       } else if (key === "p") {
         uiVisible = !uiVisible;
       }
@@ -1180,18 +1166,9 @@
       controls.update(camera);
       applyLook();
       camera.updateMatrixWorld();
-      // Follow mode: glide the pages to stay around you (smoothed so they don't
-      // jitter), keep them to the right of the label, and face them at you.
+      // Open screens stay where they are and turn to face you.
       const open = openItem();
-      if (open) {
-        const c = open.cluster;
-        if (followMode) {
-          c.center.copy(camera.position); // rigid: translate only, no turning
-          placeGroup(c);
-        } else {
-          placeGroup(c, camera.position); // stay put, but face you
-        }
-      }
+      if (open) placeGroup(open.cluster, camera.position);
       layout(time);
       aim();
       renderer.render(scene, camera);
