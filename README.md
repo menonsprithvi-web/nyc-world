@@ -23,12 +23,14 @@ Controls:
 
 - **Click** the scene to look around with the mouse (a small dot marks the centre), **Esc** to release
 - **WASD** move · **Q/E** down/up · **Shift** faster
-- Each floating label has a round **＋ button** beside it. Aim the dot at it and **click** to open:
-  - a **menu** with a **chatbox** — aim at the box, click, type a topic and press **Enter**, and the
-    pages change to that topic (click the scene to go back to looking around)
-  - **6 web pages** in a 2 × 3 grid to the right, facing you and curving towards you
+- Each floating label has a round **＋ button** beside it. Aim the dot at it and **click** to open
+  (only one label's pages are open at a time):
+  - a frosted-glass **chatbox** just below the words — aim at the box, click, type a topic and
+    press **Enter**, and the pages change to that topic (click the scene to look around again)
+  - **6 web pages** on a sphere to the right of the label, all facing inward towards a viewing
+    spot in front of the label. They're fixed in place; stand in the middle to be surrounded by them.
 - **Aim the dot** at a page: the **mouse wheel** scrolls it, **click** follows the link under the dot,
-  **◀ Back** goes back. Click the button again (now **×**) or the menu's ✕ to close.
+  **◀ Back** goes back. Click the button again (now **×**) or the chatbox's ✕ to close.
 - **T** add a label (with an optional topic) · **U** undo · **P** hide/show everything
 
 Pages are clean, script-free reading views fetched from Wikipedia (or any site that allows

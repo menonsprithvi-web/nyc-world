@@ -16,7 +16,10 @@
 
     /* Everything floating in the world (buttons, menus, pages) is projected
        from 3D every frame and driven by the crosshair, never the mouse. */
-    #world-ui { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+    #world-ui { position: fixed; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+    /* Web pages are real 3D (CSS3D) so they can sit on a sphere facing inward;
+       the crosshair hit-tests them with a raycast, not the DOM. */
+    #pages3d { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
     .surface { position: absolute; left: 0; top: 0; transform-origin: 50% 0; will-change: transform; }
 
     /* Circular button next to each label */
@@ -25,23 +28,29 @@
            font: 600 40px/1 system-ui, sans-serif; backdrop-filter: blur(4px); transition: background .12s, transform .12s; }
     .orb.hover { background: #fff; color: #111; transform: scale(1.12); }
 
-    /* Menu with chat */
-    .menu { width: 420px; height: 560px; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden;
-            background: rgba(16,18,28,.92); box-shadow: 0 0 0 2px rgba(255,255,255,.25), 0 20px 60px rgba(0,0,0,.6);
-            font: 18px/1.4 system-ui, sans-serif; color: #fff; }
+    /* Menu with chat — glassmorphism */
+    .menu { width: 420px; height: 400px; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
+            backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
+            border: 1.5px solid rgba(255,255,255,.45);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 20px 50px rgba(0,0,0,.35);
+            font: 18px/1.4 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
     .menu header { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px 18px; }
     .menu header h2 { flex: 1; margin: 0; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .menu .x { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); font-size: 20px; }
     .menu .sub { padding: 0 18px 8px; color: rgba(255,255,255,.55); font-size: 15px; }
     .menu .log { flex: 1; overflow-y: auto; padding: 8px 14px; display: flex; flex-direction: column; gap: 8px; }
     .msg { max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 16px; }
-    .msg.bot { align-self: flex-start; background: rgba(255,255,255,.1); }
-    .msg.me { align-self: flex-end; background: #2f6fed; }
-    .menu .input-row { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid rgba(255,255,255,.1); }
-    .menu input { flex: 1; min-width: 0; font: 17px system-ui, sans-serif; color: #fff; background: rgba(255,255,255,.08);
-                  border: 2px solid rgba(255,255,255,.15); border-radius: 12px; padding: 8px 12px; outline: none; }
-    .menu input:focus { border-color: #4da3ff; }
-    .menu .send { padding: 0 14px; border-radius: 12px; display: grid; place-items: center; background: #2f6fed; font-weight: 600; }
+    .msg.bot { align-self: flex-start; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.25); }
+    .msg.me { align-self: flex-end; background: rgba(77,163,255,.45); border: 1px solid rgba(255,255,255,.35); }
+    .menu .input-row { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid rgba(255,255,255,.25); }
+    .menu input { flex: 1; min-width: 0; font: 17px system-ui, sans-serif; color: #fff; background: rgba(255,255,255,.14);
+                  border: 1.5px solid rgba(255,255,255,.4); border-radius: 14px; padding: 8px 12px; outline: none; }
+    .menu input::placeholder { color: rgba(255,255,255,.7); }
+    .menu input:focus { border-color: #fff; background: rgba(255,255,255,.22); }
+    .menu .send { padding: 0 14px; border-radius: 14px; display: grid; place-items: center; font-weight: 600;
+                  background: rgba(255,255,255,.25); border: 1.5px solid rgba(255,255,255,.5); }
+    .menu { position: relative; }
     .menu .hover { outline: 3px solid #f5b400; outline-offset: 2px; }
 
     /* Web page tiles */
@@ -55,10 +64,6 @@
     .bar .back { padding: 6px 14px; border-radius: 8px; background: rgba(255,255,255,.14); font-size: 18px; }
     .bar .back.hover { background: #f5b400; color: #111; }
     .bar .back[hidden] { display: none; }
-    .tile.closed { height: 132px; background: #14161f; }
-    .tile.closed iframe, .tile.closed .back { display: none; }
-    .tile .closed-note { display: none; padding: 12px 18px; color: rgba(255,255,255,.6); font: 500 22px system-ui, sans-serif; }
-    .tile.closed .closed-note { display: block; }
 
     /* Crosshair dot + hint */
     #crosshair { position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; z-index: 3;
@@ -86,10 +91,11 @@
   <div class="hud">
     <h1>Midtown NYC</h1>
     <p>Click to look around · Esc to release · WASD move · Q/E down/up · Shift faster</p>
-    <p>Aim the dot at a ◯ button and click to open its pages + chat · walk up to a page to read it</p>
+    <p>Aim the dot at a ◯ button and click to open its pages (only one set at a time) · chat box is under the words</p>
     <p>On a page: wheel scrolls, click follows a link · T add label · U undo · P hide/show</p>
     <p id="quality"></p>
   </div>
+  <div id="pages3d"></div>
   <div id="world-ui"></div>
   <div id="crosshair"></div>
   <div id="hint"></div>
@@ -98,6 +104,7 @@
   <script type="module">
     import * as THREE from "three";
     import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
+    import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 
     const world = await (await fetch("./world.json")).json();
     const full = new URLSearchParams(location.search).get("quality") === "full";
@@ -133,10 +140,16 @@
     controls.fpsMovement.moveSpeed = 1.5;
     controls.pointerControls.enable = false;
 
+    // Pages on the sphere are rendered by a CSS3D renderer over the canvas.
+    const cssScene = new THREE.Scene();
+    const cssRenderer = new CSS3DRenderer({ element: document.getElementById("pages3d") });
+    cssRenderer.setSize(innerWidth, innerHeight);
+
     addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
+      cssRenderer.setSize(innerWidth, innerHeight);
     });
 
     // ---------- Floating words ----------
@@ -274,26 +287,15 @@
       }
     }
 
-    // Point a tile at a new page (loads now if it's open, else when opened).
+    // Point a tile at a new page and load it.
     function setTileUrl(t, pageUrl) {
       t.url = pageUrl;
       t.history = [];
       t.current = null;
-      t.loaded = false;
       t.backBtn.hidden = true;
       t.titleEl.textContent = pageUrl ? "📄 " + niceTitle(pageUrl) : "—";
       t.frame.srcdoc = "";
-      if (t.open && pageUrl) { t.loaded = true; loadPage(t, pageUrl, { push: false }); }
-    }
-
-    function setTileOpen(t, open) {
-      if (t.open === open) return;
-      t.open = open;
-      t.el.classList.toggle("closed", !open);
-      if (open && !t.loaded && t.url) {
-        t.loaded = true;
-        loadPage(t, t.url, { push: false });
-      }
+      if (pageUrl) loadPage(t, pageUrl, { push: false });
     }
 
     // ---------- Building the floating UI ----------
@@ -305,9 +307,12 @@
       return s;
     }
 
+    const TILE_WM = 1.6; // tile width in metres
+    const BAR_H = 52;    // tile title bar height, px
+
     function makeTile(item, index) {
       const el = document.createElement("div");
-      el.className = "tile closed";
+      el.className = "tile";
       const bar = document.createElement("div");
       bar.className = "bar";
       const backBtn = document.createElement("span");
@@ -318,16 +323,14 @@
       titleEl.className = "title";
       titleEl.textContent = "Finding pages…";
       bar.append(backBtn, titleEl);
-      const note = document.createElement("div");
-      note.className = "closed-note";
-      note.textContent = "Come closer to read";
       const frame = document.createElement("iframe");
       // Same-origin (srcdoc) but no scripts: we can drive it, it can't run code.
       frame.setAttribute("sandbox", "allow-same-origin");
-      el.append(bar, note, frame);
-      return addSurface(el, "tile", TILE_W, 1.4, new THREE.Vector3(), {
-        owner: item, index, frame, backBtn, titleEl, open: false, loaded: false, history: [], current: null, url: null,
-      });
+      el.append(bar, frame);
+      const obj = new CSS3DObject(el);
+      obj.scale.setScalar(TILE_WM / TILE_W); // CSS px → metres
+      cssScene.add(obj);
+      return { kind: "tile", el, obj, owner: item, index, frame, backBtn, titleEl, open: true, history: [], current: null, url: null };
     }
 
     function makeMenu(item) {
@@ -385,27 +388,39 @@
         : `I couldn't find pages about “${text}”.`);
     }
 
+    // The 6 pages sit on a sphere around a viewing spot in front of the label
+    // (at your eye height), to the right of the label, all facing inward.
+    const SPHERE_R = 2.8;                                         // metres
+    const COLS_DEG = [30, 64];                                    // to the right of the label
+    const ROWS_DEG = [26, 0, -26];                                // up / level / down
+
     function openCluster(item) {
       if (item.cluster) return;
+      for (const other of items) if (other !== item) closeCluster(other); // only one open at a time
       const L = new THREE.Vector3(item.data.position[0], item.baseY, item.data.position[2]);
       const r = item.right, t = item.toward;
-      const halfW = item.sprite.scale.x / 2;
-      const menuX = halfW + 0.45 + 0.4; // menu centre, to the right of the button
+
+      // Chatbox hangs just below the words.
       const menu = makeMenu(item);
-      menu.pos.copy(L).addScaledVector(r, menuX).setY(L.y + 0.6);
+      menu.pos.copy(L).setY(L.y - item.sprite.scale.y / 2 - 0.08);
+
+      const C = L.clone().addScaledVector(t, SPHERE_R).setY(camera.position.y);
+      const toLabel = t.clone().negate();
+      const up = new THREE.Vector3(0, 1, 0);
       const tiles = [];
-      const gridStart = menuX + 0.4 + 0.25;
-      for (let col = 0; col < 2; col++) {
-        for (let row = 0; row < 3; row++) {
+      for (const col of COLS_DEG) {
+        for (const row of ROWS_DEG) {
+          const th = THREE.MathUtils.degToRad(col), ph = THREE.MathUtils.degToRad(row);
+          const dir = toLabel.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th))
+            .multiplyScalar(Math.cos(ph)).addScaledVector(up, Math.sin(ph)).normalize();
           const tile = makeTile(item, tiles.length);
-          tile.pos.copy(L)
-            .addScaledVector(r, gridStart + 0.7 + col * 1.52)
-            .addScaledVector(t, 0.3 + col * 0.6) // curve towards the viewer
-            .setY(L.y + 1.6 - row * 1.17);
+          tile.obj.position.copy(C).addScaledVector(dir, SPHERE_R);
+          tile.obj.lookAt(C); // face inward; fixed — pages never move
+          tile.obj.updateMatrixWorld();
           tiles.push(tile);
         }
       }
-      item.cluster = { menu, tiles, firstFill: true };
+      item.cluster = { menu, tiles, firstFill: true, center: C };
       item.orb.el.textContent = "×";
       botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Walk up to a page to read it, or ask for another topic.`);
       fillTiles(item, item.data.query ?? item.data.text);
@@ -413,10 +428,14 @@
 
     function closeCluster(item) {
       if (!item.cluster) return;
-      for (const s of [item.cluster.menu, ...item.cluster.tiles]) {
-        s.el.remove();
-        surfaces.splice(surfaces.indexOf(s), 1);
+      const { menu, tiles } = item.cluster;
+      menu.el.remove();
+      surfaces.splice(surfaces.indexOf(menu), 1);
+      for (const t of tiles) {
+        cssScene.remove(t.obj);
+        t.el.remove();
       }
+      if (target && (target === menu || tiles.includes(target))) target = null;
       item.cluster = null;
       item.orb.el.textContent = "+";
     }
@@ -450,11 +469,11 @@
     // ---------- Projection ----------
     const tmp = new THREE.Vector3();
     function layout(time) {
-      const t = time / 1000;
       for (const it of items) {
-        const y = it.baseY + Math.sin(t * 1.2 + it.phase) * 0.06;
+        const y = it.baseY; // nothing bobs: words, buttons and pages stay put
         it.sprite.position.y = y;
         it.sprite.visible = uiVisible;
+        if (it.cluster) for (const tl of it.cluster.tiles) tl.obj.visible = uiVisible;
         // Orb sits just right of the words, vertically centred on them.
         it.orb.pos.set(it.data.position[0], y + 0.1, it.data.position[2])
           .addScaledVector(it.right, it.sprite.scale.x / 2 + 0.18);
@@ -472,13 +491,25 @@
           continue;
         }
         const scale = (s.widthM * focal) / depth / s.pxW;
-        if (s.kind === "tile") setTileOpen(s, true); // pages are always open and readable
         tmp.copy(s.pos).project(camera); // top-centre
         const sx = (tmp.x + 1) * innerWidth / 2;
         const sy = (1 - tmp.y) * halfH;
         const off = Math.abs(tmp.x) > 2 || Math.abs(tmp.y) > 2;
-        s.el.style.visibility = off ? "hidden" : "visible";
-        s.onScreen = !off;
+        // Buttons/chatbox draw above the 3D pages, so hide them when a page is
+        // in front of them.
+        const centre = s.kind === "orb" ? tmp.clone() : tmp.clone().setY(tmp.y - (scale * pxH) / halfH / 2);
+        // Sample the centre (and, for buttons, the edges) — hide if any is
+        // behind a page.
+        const rx = s.kind === "orb" ? (scale * s.pxW) / innerWidth : 0;
+        const ry = s.kind === "orb" ? (scale * pxH) / innerHeight : 0;
+        const samples = [[0, 0], [rx, 0], [-rx, 0], [0, ry], [0, -ry]];
+        const blocked = !off && samples.some(([dx, dy]) => {
+          const b = raycastTiles(centre.x + dx, centre.y + dy);
+          return b && b.depth < depth - 0.05;
+        });
+        const hidden = off || blocked;
+        s.el.style.visibility = hidden ? "hidden" : "visible";
+        s.onScreen = !hidden;
         s.depth = depth;
         // Orbs are centred on their point; everything else hangs from it.
         const dy = s.kind === "orb" ? -pxH / 2 : 0;
@@ -511,23 +542,54 @@
     const hint = document.getElementById("hint");
     const typing = () => document.activeElement?.tagName === "INPUT";
 
+    // Ray from the eye through the dot → which page it hits, and where on that
+    // page (in the page's own CSS pixels).
+    const inv = new THREE.Matrix4(), o = new THREE.Vector3(), f = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+    // (nx, ny) is a screen point in normalised device coords; (0, 0) = the dot.
+    function raycastTiles(nx = 0, ny = 0) {
+      let best = null;
+      const open = items.find((it) => it.cluster);
+      if (!open || !uiVisible) return null;
+      raycaster.setFromCamera(ndc.set(nx, ny), camera);
+      const { origin, direction } = raycaster.ray;
+      for (const tl of open.cluster.tiles) {
+        inv.copy(tl.obj.matrixWorld).invert();
+        o.copy(origin).applyMatrix4(inv);
+        f.copy(origin).add(direction).applyMatrix4(inv).sub(o); // direction in tile space
+        if (Math.abs(f.z) < 1e-6) continue;
+        const k = -o.z / f.z;
+        if (k <= 0) continue;
+        const px = o.x + f.x * k + TILE_W / 2;
+        const py = TILE_H / 2 - (o.y + f.y * k);
+        if (px < 0 || px > TILE_W || py < 0 || py > TILE_H) continue;
+        const hit = new THREE.Vector3(o.x + f.x * k, o.y + f.y * k, 0).applyMatrix4(tl.obj.matrixWorld);
+        const depth = -hit.applyMatrix4(camera.matrixWorldInverse).z;
+        if (!best || depth < best.depth) best = { tile: tl, px, py, depth };
+      }
+      return best;
+    }
+
+    const within = (n, x, y) =>
+      x >= n.offsetLeft && x <= n.offsetLeft + n.offsetWidth && y >= n.offsetTop && y <= n.offsetTop + n.offsetHeight;
+
     function aim() {
       const cx = innerWidth / 2, cy = innerHeight / 2;
-      const s = looking ? surfaceAt(cx, cy) : null;
+      let s = looking ? surfaceAt(cx, cy) : null;
+      const hit = looking ? raycastTiles() : null;
+      if (hit && (!s || hit.depth < s.depth)) s = hit.tile;
       let link = null, action = null, el = null;
-      if (s?.kind === "orb") {
+      if (s?.kind === "tile") {
+        if (hit.py < BAR_H) {
+          if (!s.backBtn.hidden && within(s.backBtn, hit.px, hit.py)) { action = "back"; el = s.backBtn; }
+        } else {
+          link = s.frame.contentDocument?.elementFromPoint(hit.px, hit.py - BAR_H)?.closest?.("a[href]") ?? null;
+        }
+      } else if (s?.kind === "orb") {
         action = "orb"; el = s.el;
       } else if (s?.kind === "menu") {
         el = [...s.el.querySelectorAll("[data-action]")].find((n) => inRect(n, cx, cy)) ?? null;
         action = el?.dataset.action ?? null;
-      } else if (s?.kind === "tile" && s.open) {
-        if (!s.backBtn.hidden && inRect(s.backBtn, cx, cy)) { action = "back"; el = s.backBtn; }
-        const fr = s.frame.getBoundingClientRect();
-        const doc = s.frame.contentDocument;
-        if (!action && doc && inRect(s.frame, cx, cy)) {
-          const k = fr.width / s.frame.clientWidth; // undo the tile's scale
-          link = doc.elementFromPoint((cx - fr.left) / k, (cy - fr.top) / k)?.closest?.("a[href]") ?? null;
-        }
       }
       if (link !== hoverLink) {
         hoverLink?.classList.remove("xhair-hover");
@@ -660,6 +722,7 @@
       layout(time);
       aim();
       renderer.render(scene, camera);
+      cssRenderer.render(cssScene, camera);
     });
 
     // Hooks for automated tests (headless browsers can't lock the pointer).
@@ -679,12 +742,21 @@
       orb: (i) => items[i].orb.el,
       menuEl: (i, sel) => items[i].cluster?.menu.el.querySelector(sel),
       tileEl: (i, k) => items[i].cluster?.tiles[k].el,
-      walkToTile(i, k, dist) {
-        const s = items[i].cluster.tiles[k];
-        const mid = s.pos.clone().setY(s.pos.y - 0.5);
-        camera.position.copy(mid).addScaledVector(items[i].toward, dist);
-        aimAt(mid);
+      // Stand at the centre of the open sphere and look at page k.
+      standInSphere(i) { camera.position.copy(items[i].cluster.center); },
+      aimTile(i, k) { aimAt(items[i].cluster.tiles[k].obj.position); },
+      moveTo(x, y, z) { camera.position.set(x, y, z); },
+      lookAtPoint(x, y, z) { aimAt(new THREE.Vector3(x, y, z)); },
+      tileFacing(i) {
+        // Dot product of each page's facing direction with the direction to
+        // the sphere centre (1 = faces the centre exactly).
+        const c = items[i].cluster.center;
+        return items[i].cluster.tiles.map((t) => {
+          const n = new THREE.Vector3(0, 0, 1).applyQuaternion(t.obj.quaternion);
+          return +n.dot(c.clone().sub(t.obj.position).normalize()).toFixed(3);
+        });
       },
+      tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
       state: () => ({
         looking, target: target?.kind ?? null, action: hoverAction, link: hoverLink?.textContent.trim() ?? null,
         clusters: items.filter((it) => it.cluster).map((it) => it.data.text),
