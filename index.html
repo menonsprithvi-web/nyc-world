@@ -238,7 +238,7 @@
 
     const READER_CSS = `
       html { scroll-behavior: auto; }
-      body { margin: 0; padding: 22px 30px 60px; font: 24px/1.55 Georgia, "Times New Roman", serif; color: #202122; background: #fff; }
+      body { margin: 0; padding: 22px 30px 60px; font: 28px/1.5 Georgia, "Times New Roman", serif; color: #202122; background: #fff; }
       h1, h2, h3 { font-family: system-ui, sans-serif; line-height: 1.25; }
       img { max-width: 100%; height: auto; }
       table { max-width: 100%; }
@@ -564,54 +564,70 @@
       }
     }
 
-    // The 6 pages sit on a sphere around a viewing spot in front of the label
-    // (at your eye height), to the right of the label, all facing inward.
-    const SPHERE_R = 2.8;                                         // metres
-    const COLS_DEG = [36, 96];                                    // to the right of the label (≥10° gap on every row)
-    const ROWS_DEG = [36, 0, -36];                                // up / level / down (≈12° gap between rows)
+    // The 6 pages sit on a sphere around you, in a compact 2 × 3 group just to
+    // the right of the label as seen from where you stand, each facing you.
+    // Angles are measured from the direction towards the label.
+    const SPHERE_R = 3.6;          // metres from you — far enough that all six fit in view
+    const COLS_DEG = [4, 38];      // right of the label direction (clear gap even on the top/bottom rows)
+    const ROWS_DEG = [21, 0, -21]; // up / level / down (whole group fits inside the 70° view)
 
     function openCluster(item) {
       if (item.cluster) return;
       for (const other of items) if (other !== item) closeCluster(other); // only one open at a time
       const L = new THREE.Vector3(item.data.position[0], item.baseY, item.data.position[2]);
-      const r = item.right, t = item.toward;
+      const t = item.toward;
 
       // Chatbox hangs just below the words.
       const menu = makeMenu(item);
       menu.pos.copy(L).setY(L.y - item.sprite.scale.y / 2 - 0.08);
 
-      const C = L.clone().addScaledVector(t, SPHERE_R).setY(camera.position.y);
-      const toLabel = t.clone().negate();
-      const up = new THREE.Vector3(0, 1, 0);
       const tiles = [];
       for (const col of COLS_DEG) {
         for (const row of ROWS_DEG) {
-          const th = THREE.MathUtils.degToRad(col), ph = THREE.MathUtils.degToRad(row);
-          const dir = toLabel.clone().multiplyScalar(Math.cos(th)).addScaledVector(r, Math.sin(th))
-            .multiplyScalar(Math.cos(ph)).addScaledVector(up, Math.sin(ph)).normalize();
           const tile = makeTile(item, tiles.length);
-          tile.dir = dir; // direction from the sphere centre (used by follow mode)
+          tile.th = THREE.MathUtils.degToRad(col);
+          tile.ph = THREE.MathUtils.degToRad(row);
           tiles.push(tile);
         }
       }
-      item.cluster = { menu, tiles, firstFill: true, center: C, history: [], busy: false };
-      placeTiles(item.cluster);
+      // Fixed-mode layout (F off): a viewing spot in front of the label.
+      // Follow mode (the default) re-centres this on you every frame.
+      const C = L.clone().addScaledVector(t, SPHERE_R).setY(camera.position.y);
+      item.cluster = {
+        menu, tiles, firstFill: true, history: [], busy: false, label: L,
+        center: followMode ? camera.position.clone() : C,
+        toLabel: followMode ? flatDirTo(camera.position, L, t.clone().negate()) : t.clone().negate(),
+      };
+      placeTiles(item.cluster, followMode ? camera.position : C);
       updateCloseHud();
       botSay(item, `Showing pages about “${item.data.query ?? item.data.text}”. Ask me anything about them.`);
       fillTiles(item, item.data.query ?? item.data.text);
     }
 
-    // Put every page on the sphere around cluster.center, facing inward.
-    function placeTiles(cluster) {
+    // Horizontal unit direction from `from` to `to` (or `fallback` if too close).
+    function flatDirTo(from, to, fallback) {
+      const d = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
+      return d.lengthSq() < 0.25 ? fallback.clone() : d.normalize();
+    }
+
+    // Put every page on the sphere around cluster.center, laid out relative to
+    // the direction towards the label, each turned to face `faceTarget`.
+    const UP = new THREE.Vector3(0, 1, 0);
+    function placeTiles(cluster, faceTarget) {
+      const f = cluster.toLabel;
+      const r = new THREE.Vector3(-f.z, 0, f.x); // to your right when facing the label
       for (const tile of cluster.tiles) {
-        tile.obj.position.copy(cluster.center).addScaledVector(tile.dir, SPHERE_R);
-        tile.obj.lookAt(cluster.center);
+        const dir = f.clone().multiplyScalar(Math.cos(tile.th)).addScaledVector(r, Math.sin(tile.th))
+          .multiplyScalar(Math.cos(tile.ph)).addScaledVector(UP, Math.sin(tile.ph)).normalize();
+        tile.obj.position.copy(cluster.center).addScaledVector(dir, SPHERE_R);
+        tile.obj.lookAt(faceTarget);
         tile.obj.updateMatrixWorld();
       }
     }
 
-    // Follow mode (F): the sphere of pages travels with you as you walk.
-    let followMode = false;
+    // Follow mode (on by default; F toggles): the pages stay around you as
+    // you walk, keep their place relative to the label, and face you.
+    let followMode = true;
 
     // Close button pinned to the screen while pages are open (and the X key).
     const closeHud = document.getElementById("close-hud");
@@ -932,11 +948,14 @@
       controls.update(camera);
       applyLook();
       camera.updateMatrixWorld();
-      // Follow mode: keep the sphere of pages centred on you as you walk.
+      // Follow mode: glide the pages to stay around you (smoothed so they don't
+      // jitter), keep them to the right of the label, and face them at you.
       const open = openItem();
-      if (followMode && open && !open.cluster.center.equals(camera.position)) {
-        open.cluster.center.copy(camera.position);
-        placeTiles(open.cluster);
+      if (followMode && open) {
+        const c = open.cluster;
+        c.center.lerp(camera.position, 0.2);
+        c.toLabel.lerp(flatDirTo(camera.position, c.label, c.toLabel), 0.15).normalize();
+        placeTiles(c, camera.position);
       }
       layout(time);
       aim();
@@ -993,6 +1012,24 @@
             el.push(THREE.MathUtils.radToDeg(Math.atan2(p.y, Math.hypot(p.x, p.z))));
           }
           return { az: [Math.min(...az), Math.max(...az)], el: [Math.min(...el), Math.max(...el)] };
+        });
+      },
+      // 1 = page i faces the camera exactly.
+      tileFacingCamera(i) {
+        return items[i].cluster.tiles.map((t) => {
+          const n = new THREE.Vector3(0, 0, 1).applyQuaternion(t.obj.quaternion);
+          return +n.dot(camera.position.clone().sub(t.obj.position).normalize()).toFixed(3);
+        });
+      },
+      // Fraction of each page's corners that are inside the current view.
+      tilesInView(i) {
+        return items[i].cluster.tiles.map((t) => {
+          let inside = 0;
+          for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const p = new THREE.Vector3(x * TILE_W / 2, y * TILE_H / 2, 0).applyMatrix4(t.obj.matrixWorld).project(camera);
+            if (Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && p.z < 1) inside++;
+          }
+          return inside / 4;
         });
       },
       tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
