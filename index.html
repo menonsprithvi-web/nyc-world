@@ -29,7 +29,7 @@
     .orb.hover { background: #fff; color: #111; transform: scale(1.12); }
 
     /* Menu with chat — glassmorphism */
-    .menu { width: 420px; height: 400px; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
+    .menu { width: 480px; height: 480px; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
             background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
             backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
             border: 1.5px solid rgba(255,255,255,.45);
@@ -350,7 +350,7 @@
         if (e.key === "Enter") sendChat(item);
         if (e.key === "Escape") input.blur();
       });
-      return addSurface(el, "menu", 420, 0.8, new THREE.Vector3(), { owner: item, input, log: el.querySelector(".log") });
+      return addSurface(el, "menu", 480, 1.2, new THREE.Vector3(), { owner: item, input, log: el.querySelector(".log") });
     }
 
     function botSay(item, text) {
@@ -391,8 +391,8 @@
     // The 6 pages sit on a sphere around a viewing spot in front of the label
     // (at your eye height), to the right of the label, all facing inward.
     const SPHERE_R = 2.8;                                         // metres
-    const COLS_DEG = [30, 64];                                    // to the right of the label
-    const ROWS_DEG = [26, 0, -26];                                // up / level / down
+    const COLS_DEG = [36, 96];                                    // to the right of the label (≥10° gap on every row)
+    const ROWS_DEG = [36, 0, -36];                                // up / level / down (≈12° gap between rows)
 
     function openCluster(item) {
       if (item.cluster) return;
@@ -754,6 +754,20 @@
         return items[i].cluster.tiles.map((t) => {
           const n = new THREE.Vector3(0, 0, 1).applyQuaternion(t.obj.quaternion);
           return +n.dot(c.clone().sub(t.obj.position).normalize()).toFixed(3);
+        });
+      },
+      // Angular box (azimuth/elevation, degrees) of each page as seen from the
+      // sphere centre — used to check pages don't overlap.
+      tileAngles(i) {
+        const c = items[i].cluster.center;
+        return items[i].cluster.tiles.map((t) => {
+          const az = [], el = [];
+          for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const p = new THREE.Vector3(x * TILE_W / 2, y * TILE_H / 2, 0).applyMatrix4(t.obj.matrixWorld).sub(c);
+            az.push(THREE.MathUtils.radToDeg(Math.atan2(p.x, -p.z)));
+            el.push(THREE.MathUtils.radToDeg(Math.atan2(p.y, Math.hypot(p.x, p.z))));
+          }
+          return { az: [Math.min(...az), Math.max(...az)], el: [Math.min(...el), Math.max(...el)] };
         });
       },
       tilePos: (i) => items[i].cluster.tiles.map((t) => t.obj.position.toArray().map((n) => +n.toFixed(2))),
