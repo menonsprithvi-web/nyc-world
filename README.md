@@ -30,6 +30,17 @@ Claude Agent SDK with **this machine's own Claude Code login** (no API key is st
 `claude` must be installed and logged in. Without the server (e.g. `python3 -m http.server`), the
 world still works but the chat can't answer questions.
 
+## Telem AI: routed, trust-filtered sources
+
+With a [Telem](https://telem.ai) key in `.env` (`TELEM_API_KEY=…`, git-ignored), each label's six screens
+start from a Telem search that is **auto-routed across many engines** (e.g. Exa, Tavily, Brave,
+Parallel, …). The server then **scores every result for trust** — government, university,
+intergovernmental, peer-reviewed publisher, museum/library, encyclopedia, reputable news — drops
+social media, forums and unknown sites, and keeps at most two pages per site. Each screen shows its
+**trust badge** (e.g. "Government · 95") and the chat reports what was routed, found, kept and
+dropped. Pages that block ordinary fetches are read through **Telem Fetch**. Without a key, the
+screens fall back to Wikipedia + OpenAlex.
+
 Controls:
 
 - **Click** the scene to look around with the mouse (a small dot marks the centre), **Esc** to release
