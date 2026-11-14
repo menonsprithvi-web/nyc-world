@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Midtown NYC — a World Labs Marble world</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+    canvas { display: block; touch-action: none; }
+    .hud { position: fixed; left: 16px; top: 16px; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+    .hud h1 { margin: 0 0 4px; font-size: 15px; }
+    .hud p { margin: 2px 0; color: rgba(255,255,255,.7); }
+    .hud a { color: #9cf; }
+    #status { position: fixed; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.75); pointer-events: none; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.4.0/spark.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="hud">
+    <h1>Midtown NYC</h1>
+    <p>WASD move · drag look · Q/E down/up · Shift faster</p>
+    <p id="quality"></p>
+  </div>
+  <div id="status">Loading 3D world…</div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
+
+    const world = await (await fetch("./world.json")).json();
+    const full = new URLSearchParams(location.search).get("quality") === "full";
+    const url = full ? world.assets.full_res_spz_url : "./assets/nyc_500k.spz";
+
+    const q = document.getElementById("quality");
+    q.innerHTML = full
+      ? `Full resolution (~69 MB) · <a href="?">use 500k</a>`
+      : `500k splats · <a href="?quality=full">load full resolution (~69 MB)</a>`;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 1000);
+    scene.add(new SparkRenderer({ renderer }));
+
+    const splats = new SplatMesh({ url });
+    // Marble SPZ files use an OpenCV frame; rotate 180° about X for three.js (y-up).
+    splats.quaternion.set(1, 0, 0, 0);
+    scene.add(splats);
+
+    const status = document.getElementById("status");
+    splats.initialized
+      .then(() => status.remove())
+      .catch((e) => { status.textContent = "Couldn't load the 3D world: " + e; });
+
+    const controls = new SparkControls({ canvas: renderer.domElement });
+    controls.fpsMovement.moveSpeed = 1.5;
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    renderer.setAnimationLoop(() => {
+      controls.update(camera);
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>

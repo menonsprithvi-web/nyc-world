@@ -1,0 +1,18 @@
+{
+  "title": "Midtown NYC",
+  "generator": "World Labs Marble API",
+  "model": "marble-1.1-plus",
+  "world_id": "826538f2-f5c8-4ec8-9abd-9deec5b479fe",
+  "marble_url": "https://marble.worldlabs.ai/world/826538f2-f5c8-4ec8-9abd-9deec5b479fe",
+  "generated_at": "2026-11-14",
+  "prompt": "Standing in the middle of a busy Midtown Manhattan avenue intersection at golden hour. Towering Art Deco and glass skyscrapers rise on all sides, warm sunlight raking down the avenue between them and glinting off windows. Yellow taxi cabs and a city bus wait at the crosswalk, wide white zebra-striped crosswalks, a hot dog cart with a striped umbrella on the corner, steam rising from a manhole cover, green street signs and traffic lights on black poles, a subway entrance with green globe lamps and iron railings, fire escapes on older brick buildings, storefront awnings, newsstand, pedestrians in coats on wide gray sidewalks. Glowing colorful LED billboards on building facades in the distance. Cinematic, photorealistic, sharp detail, crisp textures, clean legible signage, vivid but natural color.",
+  "caption": "The scene is a bustling Midtown Manhattan avenue intersection, captured in a cinematic, photorealistic style, evoking the vibrant energy of a city at golden hour. The overall tone is dynamic and energetic, with warm light illuminating the urban landscape. Towering Art Deco and sleek glass skyscrapers ascend on all sides, their facades reflecting and refracting the warm sunlight that rakes down the avenue between them, causing windows to glint brilliantly. Yellow taxi cabs and a city bus are stationary at the crosswalk, which features wide, white zebra-striped markings. A hot dog cart, adorned with a striped umbrella, is positioned on a corner, emitting a plume of steam from a nearby manhole cover. Green street signs and traffic lights are mounted on black poles, directing the flow of traffic and pedestrians. A subway entrance, marked by green globe lamps and robust iron railings, provides access to the underground transit system. Older brick buildings feature intricate fire escapes, while storefronts display various awnings. A newsstand is visible, catering to passersby. Pedestrians, clad in coats, traverse the wide, gray sidewalks. In the distance, glowing, colorful LED billboards illuminate building facades, adding to the urban spectacle.",
+  "assets": {
+    "splat_500k": "assets/nyc_500k.spz",
+    "panorama": "assets/nyc_pano.jpg",
+    "preview": "assets/preview.jpg",
+    "full_res_spz_url": "https://cdn.marble.worldlabs.ai/826538f2-f5c8-4ec8-9abd-9deec5b479fe/1cbc0383-5a9a-4d5c-894b-a58293454f19_ceramic.spz",
+    "splat_500k_source_url": "https://cdn.marble.worldlabs.ai/826538f2-f5c8-4ec8-9abd-9deec5b479fe/03af7fd5-9f35-4f36-b2d9-4b39e538cf3f_ceramic_500k.spz",
+    "panorama_source_url": "https://cdn.marble.worldlabs.ai/826538f2-f5c8-4ec8-9abd-9deec5b479fe/26f007f7-9b99-47b5-8dc1-184369d9d234_panos/rgb_0.png"
+  }
+}
