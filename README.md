@@ -21,15 +21,17 @@ and open the published URL.
 
 Controls:
 
-- **Click** the scene to look around with the mouse (crosshair in the centre), **Esc** to release
+- **Click** the scene to look around with the mouse (a dot marks the centre), **Esc** to release
 - **WASD** move · **Q/E** down/up · **Shift** faster
-- **Aim the crosshair at a floating web page** — it glows blue — and **click** to use it in place
-  (scroll, click links, type). It glows green while you're using it. **Click the scene** or press
-  **Esc** to go back to looking around.
+- Web pages stay **closed boxes** until you're close enough to read them, then open automatically
+  (and close again when you walk away) to keep the scene uncluttered.
+- **Aim the dot** at an open page: the **mouse wheel** scrolls it, the link under the dot is
+  highlighted, and **click** follows it inside the panel. Aim at **◀ Back** and click to go back.
 - **T** add floating text (optionally with a web page under it) · **U** undo · **C** copy labels ·
   **P** show/hide pages
 
-Only sites that allow embedding can be shown as pages (Wikipedia does; many sites don't).
+Pages are shown as clean, script-free reading views (fetched as HTML) so the crosshair can drive
+them. Wikipedia works well; other sites only work if they allow cross-origin fetching.
 
 Add `?quality=full` to the URL to stream the full-resolution splat (~69 MB) from the
 World Labs CDN instead of the bundled 500k version (~8 MB).
