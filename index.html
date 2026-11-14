@@ -568,7 +568,7 @@
     // the right of the label as seen from where you stand, each facing you.
     // Angles are measured from the direction towards the label.
     const SPHERE_R = 3.6;          // metres from you — far enough that all six fit in view
-    const COLS_DEG = [4, 38];      // right of the label direction (clear gap even on the top/bottom rows)
+    const COLS_DEG = [26, 60];     // right of the label, clear of the words, button and chatbox
     const ROWS_DEG = [21, 0, -21]; // up / level / down (whole group fits inside the 70° view)
 
     function openCluster(item) {
@@ -627,12 +627,13 @@
 
     // Follow mode (on by default; F toggles): the pages stay around you as
     // you walk, keep their place relative to the label, and face you.
-    let followMode = true;
+    let followMode = false; // pages stay in place (but face you); F makes them follow
 
     // Close button pinned to the screen while pages are open (and the X key).
     const closeHud = document.getElementById("close-hud");
     const openItem = () => items.find((it) => it.cluster);
     function updateCloseHud() {
+      for (const x of items) x.orb.el.textContent = x.cluster ? "×" : "+"; // world button: × while open
       const it = openItem();
       closeHud.hidden = !it;
       if (it) closeHud.querySelector(".label").textContent = `Close “${it.data.text}”`;
@@ -723,8 +724,8 @@
           const b = raycastTiles(centre.x + dx, centre.y + dy);
           return b && b.depth < depth - 0.05;
         });
-        // A label's button is replaced by the on-screen close button while its pages are open.
-        const hidden = off || blocked || (s.kind === "orb" && !!s.owner.cluster);
+        // (A label's button stays visible and shows × while its pages are open.)
+        const hidden = off || blocked;
         s.el.style.visibility = hidden ? "hidden" : "visible";
         s.onScreen = !hidden;
         s.depth = depth;
@@ -951,10 +952,13 @@
       // Follow mode: glide the pages to stay around you (smoothed so they don't
       // jitter), keep them to the right of the label, and face them at you.
       const open = openItem();
-      if (followMode && open) {
+      if (open) {
         const c = open.cluster;
-        c.center.lerp(camera.position, 0.2);
-        c.toLabel.lerp(flatDirTo(camera.position, c.label, c.toLabel), 0.15).normalize();
+        if (followMode) {
+          c.center.lerp(camera.position, 0.2);
+          c.toLabel.lerp(flatDirTo(camera.position, c.label, c.toLabel), 0.15).normalize();
+        }
+        // Either way, every page turns to face you (in place when not following).
         placeTiles(c, camera.position);
       }
       layout(time);
@@ -1002,8 +1006,8 @@
       },
       // Angular box (azimuth/elevation, degrees) of each page as seen from the
       // sphere centre — used to check pages don't overlap.
-      tileAngles(i) {
-        const c = items[i].cluster.center;
+      tileAngles(i, fromCamera = false) {
+        const c = fromCamera ? camera.position.clone() : items[i].cluster.center;
         return items[i].cluster.tiles.map((t) => {
           const az = [], el = [];
           for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {

@@ -31,14 +31,14 @@ Controls:
     *"put the Empire State Building on screen 3"*, *"highlight where screen 5 talks about Korea Way"*
     or *"show me pages about Central Park instead"*. You can also type `/pages <topic>` directly.
     Click the scene to look around again.
-  - **6 web pages** in a 2 × 3 group around you, just to the right of the label as seen from where
-    you stand. They **follow you** as you walk (gliding smoothly), always **face you**, and are sized
-    so all six fit in view at once — turn your head to look from one to the next.
+  - **6 web pages** in a 2 × 3 group in front of the label, to the right of the words and chatbox.
+    They **stay in place** but always **turn to face you** as you move, and are sized so all six fit
+    in view from the spot in front of the label.
 - **Aim the dot** at a page: the **mouse wheel** scrolls it, **click** follows the link under the dot,
   **◀ Back** goes back.
-- While pages are open, a **Close** button stays pinned to the top-right of the screen — press **X**
-  (or click it with the mouse free) to close. **F** toggles following off (pages
-  stay where they are) and back on.
+- To close: click the **×** button beside the label, press **X**, or use the **Close** button pinned
+  to the top-right of the screen. **F** makes the pages **follow you** as you walk (press again to
+  leave them in place).
 - **T** add a label (with an optional topic) · **U** undo · **P** hide/show everything
 
 Pages are clean, script-free reading views fetched from Wikipedia (or any site that allows
