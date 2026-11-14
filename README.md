@@ -6,6 +6,17 @@ rendered in the browser with [Spark](https://sparkjs.dev) + three.js.
 
 ![Panorama preview](assets/preview.jpg)
 
+## Worlds
+
+| World | Open | What it is |
+| --- | --- | --- |
+| Midtown NYC | `http://localhost:8123/` | A Midtown Manhattan intersection at dusk |
+| Neon District | `http://localhost:8123/?world=neon` | An original cyberpunk street at night — neon towers with invented signage, an elevated train, a street-food stall, rain-slicked asphalt |
+
+Both are generated with the World Labs Marble API (`marble-1.1-plus`) and have every feature below.
+Each world is configured in `worlds/<id>.json` (3D file, title, floating labels and the topic for
+each label's six sources); switch between them from the **Worlds** links in the help panel.
+
 ## View it
 
 ```bash

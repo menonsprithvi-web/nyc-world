@@ -104,8 +104,8 @@
                    overflow: hidden; background: #fff;
                    box-shadow: 0 0 0 1px var(--outline), 0 24px 60px rgba(0,0,0,.5); transition: box-shadow .15s; }
     .tile .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
-    .tile .tclose { position: absolute; right: 4px; top: 4px; width: 48px; height: 48px; border-radius: 50%;
-                    display: grid; place-items: center; font-size: 22px; background: var(--surface); color: var(--on-surface);
+    .tile .tclose { position: absolute; right: 0; top: 0; width: 64px; height: 64px; border-radius: 50%;
+                    display: grid; place-items: center; font-size: 30px; background: var(--surface); color: var(--on-surface);
                     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
                     box-shadow: 0 0 0 1px var(--outline), 0 8px 20px rgba(0,0,0,.45); transition: background .12s, color .12s; }
     .tile .tclose.hover { background: var(--primary); color: var(--on-primary); }
@@ -169,14 +169,23 @@
     import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
     import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 
-    const world = await (await fetch("./world.json")).json();
-    const full = new URLSearchParams(location.search).get("quality") === "full";
-    const url = full ? world.assets.full_res_spz_url : "./assets/nyc_500k.spz";
+    // Which world: ?world=<id> loads worlds/<id>.json (default: nyc).
+    const params = new URLSearchParams(location.search);
+    const WORLDS = [["nyc", "Midtown NYC"], ["neon", "Neon District"]];
+    const worldId = (params.get("world") ?? "nyc").replace(/[^a-z0-9-]/gi, "") || "nyc";
+    const world = await (await fetch(`./worlds/${worldId}.json`)).json();
+    const full = params.get("quality") === "full";
+    const url = full ? world.assets.full_res_spz_url : world.assets.splat_500k;
 
+    document.title = `${world.title} — a World Labs Marble world`;
+    document.querySelector(".hud h1").textContent = world.title;
     const q = document.getElementById("quality");
-    q.innerHTML = full
-      ? `Full resolution (~69 MB) · <a href="?">use 500k</a>`
-      : `500k splats · <a href="?quality=full">load full resolution (~69 MB)</a>`;
+    const mb = world.assets.full_res_mb ?? "?";
+    const link = (extra) => `?world=${worldId}${extra}`;
+    q.innerHTML = (full
+      ? `Full resolution (~${mb} MB) · <a href="${link("")}">use 500k</a>`
+      : `500k splats · <a href="${link("&quality=full")}">load full resolution (~${mb} MB)</a>`) +
+      ` · Worlds: ${WORLDS.map(([id, name]) => id === worldId ? `<b>${name}</b>` : `<a href="?world=${id}">${name}</a>`).join(" · ")}`;
 
     const renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -247,27 +256,12 @@
       return sprite;
     }
 
-    // Labels. Positions are [x, y, z] relative to the starting viewpoint:
-    // -z is straight ahead, +x is right, +y is up. `query` picks the 6 pages
-    // (scholarly search on OpenAlex); `url` (optional) is pinned as page 1.
+    // Labels come from the world's config (worlds/<id>.json). Positions are
+    // [x, y, z] relative to the starting viewpoint: -z is straight ahead, +x is
+    // right, +y is up. `query` picks the 6 sources; `url` (optional) is pinned.
     const WIKI = "https://en.wikipedia.org/wiki/";
-    const DEFAULT_LABELS = [
-      { text: "Midtown Manhattan", position: [0, 3.2, -9], size: 2, color: "#ffffff",
-        query: "Midtown Manhattan urban development" },
-      // Cars, estimated from where they sit in the panorama
-      // (left yellow cab, center yellow cab, white sedan on the right).
-      { text: "car", position: [-5.5, 0.15, -7.1], size: 1.3, color: "#ffd84a",
-        query: "New York City taxi" },
-      { text: "car", position: [2.2, 0.15, -8.7], size: 1.3, color: "#ffd84a",
-        query: "taxi ride-hailing competition New York" },
-      { text: "car", position: [7.4, 0.15, -3.1], size: 1.3, color: "#ffffff",
-        query: "automobile dependence cities" },
-      { text: "🌭 Street vendors", position: [-5, 1.8, 4], size: 1, color: "#ff8a8a",
-        query: "street food vendors New York City" },
-      { text: "✨ Generated with World Labs Marble", position: [3.5, 0.2, -4], size: 0.7, color: "#9fd4ff",
-        query: "3D Gaussian splatting" },
-    ];
-    const STORE = "nyc-world-labels-v4";
+    const DEFAULT_LABELS = world.labels ?? [];
+    const STORE = `world-labels-v5-${worldId}`;
     let labels = JSON.parse(localStorage.getItem(STORE) ?? "null") ?? DEFAULT_LABELS;
     const saveLabels = () => localStorage.setItem(STORE, JSON.stringify(labels));
 
@@ -647,12 +641,20 @@
         searchWiki(query, 6).catch(() => []),
         searchScholar(query, 6).catch(() => []),
       ]);
-      for (let i = 0; found.length < 6 && (i < wiki.length || i < papers.length); i++) {
-        if (i < 3 && wiki[i]) found.push(wiki[i]);
-        if (i < 3 && papers[i]) found.push(papers[i]);
+      // Order: pinned, then alternate encyclopedia / paper, then the rest.
+      // Skip repeats by title (OpenAlex sometimes lists one paper twice).
+      const order = [...pinned];
+      for (let i = 0; i < 3; i++) order.push(wiki[i], papers[i]);
+      order.push(...wiki.slice(3), ...papers.slice(3));
+      const seen = new Set();
+      for (const u of order) {
+        if (!u || found.length >= 6) continue;
+        const key = niceTitle(u).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push(u);
       }
-      for (const u of [...wiki.slice(3), ...papers.slice(3)]) if (found.length < 6) found.push(u);
-      const urls = [...new Set([...pinned, ...found])].slice(0, 6);
+      const urls = found;
       item.cluster.tiles.forEach((t, i) => setTileUrl(t, urls[i] ?? null));
       return urls;
     }
@@ -1043,7 +1045,8 @@
       let link = null, action = null, el = null;
       if (s?.kind === "tile") {
         if (hit.py < ORBIT_H) {
-          if (within(s.closeBtn, hit.px, hit.py)) { action = "close"; el = s.closeBtn; }
+          // Close: the ✕, with a forgiving hit area around the top-right corner.
+          if (within(s.closeBtn, hit.px, hit.py) || (hit.px > TILE_W - 100 && hit.py < 84)) { action = "close"; el = s.closeBtn; }
           else if (!s.backBtn.hidden && within(s.backBtn, hit.px, hit.py)) { action = "back"; el = s.backBtn; }
         } else {
           link = s.frame.contentDocument?.elementFromPoint(hit.px, hit.py - ORBIT_H)?.closest?.("a[href]") ?? null;

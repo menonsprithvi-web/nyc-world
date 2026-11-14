@@ -1,0 +1,30 @@
+{
+  "id": "neon",
+  "title": "Neon District",
+  "generator": "World Labs Marble API",
+  "model": "marble-1.1-plus",
+  "world_id": "cabf62ad-fb71-41b9-aec3-96f7f54a075e",
+  "marble_url": "https://marble.worldlabs.ai/world/cabf62ad-fb71-41b9-aec3-96f7f54a075e",
+  "generated_at": "2026-11-14",
+  "prompt": "Standing in the middle of a narrow street in an original futuristic cyberpunk megacity at night, after rain. Dense towering buildings on both sides covered in glowing neon signs with invented, abstract symbols and shapes (no real brands or logos), vertical light strips in magenta, cyan and amber, holographic advertisement panels projected between buildings. Wet asphalt with mirror-like reflections of the neon, puddles, steam rising from street grates, a small noodle food stall with red paper lanterns and stools, vending machines glowing on the sidewalk, tangled overhead power cables, an elevated train track crossing above the street, fire escapes and air-conditioning units, distant skyscrapers fading into haze. Cinematic, photorealistic, moody, high contrast, sharp detail, crisp textures.",
+  "assets": {
+    "splat_500k": "./assets/neon_500k.spz",
+    "panorama": "./assets/neon_pano.jpg",
+    "full_res_spz_url": "https://cdn.marble.worldlabs.ai/cabf62ad-fb71-41b9-aec3-96f7f54a075e/234049cb-4ed8-4606-9b55-f74b41265055_ceramic.spz",
+    "full_res_mb": 68
+  },
+  "labels": [
+    { "text": "Cyberpunk megacity", "position": [-0.8, 3.6, -12], "size": 2, "color": "#7df9ff",
+      "query": "cyberpunk literature dystopian city" },
+    { "text": "Neon signs", "position": [-7.9, 2.5, -0.9], "size": 1.4, "color": "#ff6ad5",
+      "query": "neon sign lighting history" },
+    { "text": "Elevated train", "position": [-3.3, 2.2, 7.3], "size": 1.4, "color": "#ffe066",
+      "query": "elevated railway urban transit" },
+    { "text": "Street food stall", "position": [6.7, 0.9, -2.2], "size": 1.2, "color": "#ff8a5c",
+      "query": "street food stall night market" },
+    { "text": "Rain-slicked street", "position": [0.6, -1.05, -2.6], "size": 1.1, "color": "#a8c7fa",
+      "query": "urban light pollution at night" },
+    { "text": "✨ Generated with World Labs Marble", "position": [-3, 0.0, -3.5], "size": 0.7, "color": "#9fd4ff",
+      "query": "3D Gaussian splatting" }
+  ]
+}
