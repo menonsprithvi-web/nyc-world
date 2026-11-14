@@ -25,8 +25,11 @@
     /* Circular button next to each label */
     .orb { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
            background: rgba(255,255,255,.18); border: 3px solid rgba(255,255,255,.85); color: #fff;
-           font: 600 40px/1 system-ui, sans-serif; backdrop-filter: blur(4px); transition: background .12s, transform .12s; }
-    .orb.hover { background: #fff; color: #111; transform: scale(1.12); }
+           font: 600 40px/1 system-ui, sans-serif; backdrop-filter: blur(4px);
+           /* Never transition `transform`: it is rewritten every frame to place the
+              button, and animating it makes the button trail behind (dodge the dot). */
+           transition: background .12s, color .12s, box-shadow .12s; }
+    .orb.hover { background: #fff; color: #111; box-shadow: 0 0 0 6px rgba(255,255,255,.45), 0 0 24px rgba(255,255,255,.8); }
 
     /* Menu with chat — glassmorphism */
     .menu { width: 480px; height: 480px; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
@@ -622,7 +625,14 @@
     function surfaceAt(x, y) {
       let best = null;
       for (const s of surfaces) {
-        if (!s.onScreen || !inRect(s.el, x, y)) continue;
+        if (!s.onScreen) continue;
+        if (s.kind === "orb") {
+          // Buttons are small from a distance: count the dot as "on" one within
+          // a slightly larger circle (at least 16px radius) around its centre.
+          const r = s.el.getBoundingClientRect();
+          const radius = Math.max(16, r.width * 0.7);
+          if (Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) > radius) continue;
+        } else if (!inRect(s.el, x, y)) continue;
         if (!best || s.depth < best.depth) best = s;
       }
       return best;
@@ -847,6 +857,12 @@
         lookDY += Math.atan((r.top + r.height / 2 - innerHeight / 2) / focal) / 0.0022;
       },
       orb: (i) => items[i].orb.el,
+      // Where button i should be on screen (projected from its 3D point).
+      orbExpected(i) {
+        const p = items[i].orb.pos.clone().project(camera);
+        return { x: (p.x + 1) * innerWidth / 2, y: (1 - p.y) * innerHeight / 2 };
+      },
+      turn(dxPx, dyPx) { lookDX += dxPx; lookDY += dyPx; },
       menuEl: (i, sel) => items[i].cluster?.menu.el.querySelector(sel),
       tileEl: (i, k) => items[i].cluster?.tiles[k].el,
       // Stand at the centre of the open sphere and look at page k.
