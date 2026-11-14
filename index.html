@@ -64,6 +64,9 @@
     .bar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px 0 18px; flex: none;
            background: #14161f; color: rgba(255,255,255,.9); font: 600 20px system-ui, sans-serif; }
     .bar .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar .num { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+                background: #fff; color: #14161f; font: 800 18px system-ui, sans-serif; }
+    .msg.note { font-size: 14px; opacity: .85; font-style: italic; }
     .bar .back { padding: 6px 14px; border-radius: 8px; background: rgba(255,255,255,.14); font-size: 18px; }
     .bar .back.hover { background: #f5b400; color: #111; }
     .bar .back[hidden] { display: none; }
@@ -244,6 +247,7 @@
       .mw-editsection, .navbox, .metadata, .ambox, .hatnote, .noprint, .mw-empty-elt, .reference { display: none !important; }
       a { color: #3366cc; text-decoration: none; }
       a.xhair-hover { background: #ffe98a; outline: 3px solid #f5b400; border-radius: 3px; color: #111; }
+      mark.xhl { background: #7cf0a8; color: #111; padding: 2px 3px; border-radius: 4px; box-shadow: 0 0 0 3px #2fbf71; }
       .source { margin-top: 40px; font: 16px system-ui, sans-serif; color: #72777d; }
     `;
 
@@ -281,7 +285,7 @@
       base.href = res.url;
       doc.head.prepend(base);
       const style = doc.createElement("style");
-      style.textContent = "a.xhair-hover { background: #ffe98a; outline: 3px solid #f5b400; border-radius: 3px; color: #111; }";
+      style.textContent = "a.xhair-hover { background: #ffe98a; outline: 3px solid #f5b400; border-radius: 3px; color: #111; } mark.xhl { background: #7cf0a8; color: #111; padding: 2px 3px; border-radius: 4px; box-shadow: 0 0 0 3px #2fbf71; }";
       doc.head.append(style);
       return { title: doc.title || pageUrl, html: "<!doctype html>" + doc.documentElement.outerHTML };
     }
@@ -302,6 +306,85 @@
         t.frame.srcdoc = `<body style="font:22px system-ui;padding:30px;color:#444">Couldn't load this page here.<br><small>${String(err.message).replace(/</g, "&lt;")}</small></body>`;
         t.titleEl.textContent = niceTitle(pageUrl);
       }
+    }
+
+    // ---------- Screen actions from the chat ----------
+    // Scroll a screen to the first occurrence of `text` and highlight it.
+    // The phrase may span several text nodes (links, italics), so search the
+    // page's whole text and map the match back onto the nodes. If the exact
+    // phrase isn't there, fall back to the longest run of its words that is.
+    // Returns the text that was highlighted, or null.
+    function highlightText(t, text) {
+      const doc = t.frame.contentDocument;
+      if (!doc?.body || !text) return null;
+      doc.querySelectorAll("mark.xhl").forEach((m) => m.replaceWith(...m.childNodes));
+      doc.body.normalize();
+
+      const nodes = [];
+      let full = "";
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      for (let n; (n = walker.nextNode()); ) {
+        if (n.parentElement?.closest("style, script")) continue;
+        nodes.push({ node: n, start: full.length });
+        full += n.textContent;
+      }
+      const words = text.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      let match = null;
+      for (let len = words.length; len >= Math.min(2, words.length) && !match; len--) {
+        for (let i = 0; i + len <= words.length && !match; i++) {
+          match = new RegExp(words.slice(i, i + len).join("\\s+"), "i").exec(full);
+        }
+      }
+      if (!match) return null;
+
+      const from = match.index, to = match.index + match[0].length;
+      let first = null;
+      // Wrap each overlapping node's slice, last first so offsets stay valid.
+      for (const { node, start } of [...nodes].reverse()) {
+        const end = start + node.textContent.length;
+        if (end <= from || start >= to) continue;
+        const range = doc.createRange();
+        range.setStart(node, Math.max(0, from - start));
+        range.setEnd(node, Math.min(node.textContent.length, to - start));
+        const mark = doc.createElement("mark");
+        mark.className = "xhl";
+        range.surroundContents(mark);
+        first = mark;
+      }
+      first?.scrollIntoView({ block: "center" });
+      return match[0];
+    }
+
+    // Wait until a screen has finished loading `pageUrl`.
+    const waitForLoad = (t) => new Promise((resolve) => {
+      const done = () => { t.frame.removeEventListener("load", done); resolve(); };
+      t.frame.addEventListener("load", done);
+      setTimeout(done, 8000);
+    });
+
+    async function runActions(item, actions) {
+      const tiles = item.cluster.tiles;
+      const notes = [];
+      for (const a of actions) {
+        const screen = Number(a?.screen);
+        const t = tiles[screen - 1];
+        if (a?.type === "open" && t && typeof a.page === "string") {
+          const pageUrl = WIKI + encodeURIComponent(a.page.trim().replace(/ /g, "_"));
+          const loaded = waitForLoad(t);
+          await loadPage(t, pageUrl);
+          await loaded;
+          notes.push(`↳ opened “${a.page}” on screen ${screen}`);
+        } else if (a?.type === "find" && t && typeof a.text === "string") {
+          const found = highlightText(t, a.text);
+          notes.push(found
+            ? `↳ highlighted “${found}” on screen ${screen}`
+            : `↳ couldn't find “${a.text}” on screen ${screen}`);
+        } else if (a?.type === "topic" && typeof a.query === "string") {
+          const urls = await fillTiles(item, a.query);
+          notes.push(`↳ showing ${urls.length} pages about “${a.query}”`);
+        }
+      }
+      return notes;
     }
 
     // Point a tile at a new page and load it.
@@ -339,7 +422,10 @@
       const titleEl = document.createElement("span");
       titleEl.className = "title";
       titleEl.textContent = "Finding pages…";
-      bar.append(backBtn, titleEl);
+      const num = document.createElement("span");
+      num.className = "num";
+      num.textContent = String(index + 1); // screen number, so you and the chat can refer to it
+      bar.append(num, backBtn, titleEl);
       const frame = document.createElement("iframe");
       // Same-origin (srcdoc) but no scripts: we can drive it, it can't run code.
       frame.setAttribute("sandbox", "allow-same-origin");
@@ -449,12 +535,28 @@
             const data = JSON.parse(chunk.match(/^data: (.+)$/m)?.[1] ?? "{}");
             if (ev === "delta") {
               answer += data.text;
-              reply.textContent = answer;
+              // The trailing ```actions block is for us, not for display.
+              reply.textContent = answer.split("```actions")[0].trimEnd() || "…";
               reply.scrollIntoView({ block: "end" });
             } else if (ev === "error") throw new Error(data.message);
           }
         }
         cluster.history.push({ role: "user", content: text }, { role: "assistant", content: answer });
+
+        // Carry out any screen actions Claude asked for.
+        const block = answer.match(/```actions\s*([\s\S]*?)```/)?.[1];
+        if (block) {
+          let actions = [];
+          try { actions = JSON.parse(block); } catch { actions = []; }
+          const notes = await runActions(item, Array.isArray(actions) ? actions : [actions]);
+          if (notes.length) {
+            const n = document.createElement("div");
+            n.className = "msg bot note";
+            n.textContent = notes.join(" · ");
+            cluster.menu.log.append(n);
+            n.scrollIntoView({ block: "end" });
+          }
+        }
       } catch (err) {
         reply.textContent = `Sorry — ${err.message}`;
       } finally {

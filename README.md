@@ -27,7 +27,10 @@ Controls:
   (only one label's pages are open at a time):
   - a frosted-glass **chatbox** just below the words — aim at the box, click, type a question and
     press **Enter**; Claude answers using the text of all six pages and cites them like [3].
-    Type `/pages <topic>` to swap the six pages to a new topic. Click the scene to look around again.
+    The chat can also **change the screens** (each has a number badge 1-6): ask it to
+    *"put the Empire State Building on screen 3"*, *"highlight where screen 5 talks about Korea Way"*
+    or *"show me pages about Central Park instead"*. You can also type `/pages <topic>` directly.
+    Click the scene to look around again.
   - **6 web pages** on a sphere to the right of the label, all facing inward towards a viewing
     spot in front of the label. They're fixed in place; stand in the middle to be surrounded by them.
 - **Aim the dot** at a page: the **mouse wheel** scrolls it, **click** follows the link under the dot,
