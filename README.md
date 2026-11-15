@@ -1,5 +1,9 @@
 # Midtown NYC — a World Labs Marble world
 
+**▶ Demo video:** [docs/demo.mp4](docs/demo.mp4) — an 83-second captioned tour of every feature
+(World Labs world, crosshair interaction, Telem search plans + trust filtering, Claude chat on Telem,
+Telem Monitors).
+
 A walkable 3D Gaussian-splat world of a Midtown Manhattan intersection, generated
 with the [World Labs](https://www.worldlabs.ai) Marble API (`marble-1.1-plus`) and
 rendered in the browser with [Spark](https://sparkjs.dev) + three.js.
